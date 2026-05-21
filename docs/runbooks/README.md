@@ -4,7 +4,8 @@ Repeatable recipes for repository-wide maintenance or recurring experiment opera
 
 Current runbooks:
 
-- `create-experiment.md` — start a new nested experiment from the template.
+- `new-skunkwork-experiment-cookbook.md` — complete playbook for creating a new experiment with local AGENTS/docs/todos/handoff.
+- `create-experiment.md` — short command-oriented version of the new-experiment flow.
 - `graduate-or-archive-experiment.md` — leave a useful trail when an experiment moves on or stops.
 
 Other possible runbooks:

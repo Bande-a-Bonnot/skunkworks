@@ -78,6 +78,13 @@ Build a tiny Swift command-line package or test target that:
 4. Compares managed-object traversal against a value-snapshot adjacency list.
 5. Records where Core Data helps and where it gets in the way.
 
+## Local Project Files
+
+- `AGENTS.md` — local agent instructions.
+- `docs/HANDOFF.md` — current state and exact next action.
+- `docs/initial-questions.md` — question bank.
+- `todos/` — local task breakdown.
+
 ## Quick Start
 
 No runnable code yet.

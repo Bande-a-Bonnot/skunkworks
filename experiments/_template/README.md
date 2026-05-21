@@ -18,6 +18,12 @@ Why is this interesting, funny, potentially useful, or worth trying despite bein
 
 If there is no runnable artifact yet, say how to inspect the idea.
 
+## Local Docs
+
+- `AGENTS.md` — local agent instructions.
+- `docs/HANDOFF.md` — current state and next action.
+- `todos/` — local task records.
+
 ## Notes / Findings
 
 - Capture surprising observations here.

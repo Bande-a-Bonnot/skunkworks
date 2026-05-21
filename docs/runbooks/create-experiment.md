@@ -2,6 +2,8 @@
 
 Use this when adding a new experiment under `experiments/`.
 
+For the full playbook, see `new-skunkwork-experiment-cookbook.md`.
+
 ## Steps
 
 1. Pick a short kebab-case slug:

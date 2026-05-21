@@ -38,13 +38,15 @@ Initial repo scaffolding has been created:
 - `docs/` with handoff plus category directories and initial repo-shape brainstorm.
 - `todos/` with todo conventions and initial follow-up tasks.
 - `experiments/` with a README, copyable `_template/`, and two seeded Core Data experiment directories.
-- `docs/runbooks/create-experiment.md` and `docs/runbooks/graduate-or-archive-experiment.md` for common lifecycle tasks.
+- `docs/runbooks/new-skunkwork-experiment-cookbook.md`, `docs/runbooks/create-experiment.md`, and `docs/runbooks/graduate-or-archive-experiment.md` for common lifecycle tasks.
 - `.gitignore` for common local/generated/secret files.
 
 Seeded experiments:
 
-- `experiments/core-data-rest-layer/` — Core Data as an object graph/change-tracking layer over REST APIs.
-- `experiments/core-data-graph-db/` — graph database primitives and algorithms, including Dijkstra, using Core Data.
+- `experiments/core-data-rest-layer/` — Core Data as an object graph/change-tracking layer over REST APIs. Has local `AGENTS.md`, `docs/HANDOFF.md`, docs sections, and local todos.
+- `experiments/core-data-graph-db/` — graph database primitives and algorithms, including Dijkstra, using Core Data. Has local `AGENTS.md`, `docs/HANDOFF.md`, docs sections, and local todos.
+
+Experiment template now includes local `AGENTS.md`, `docs/HANDOFF.md`, docs sections, and `todos/README.md`. Use `docs/runbooks/new-skunkwork-experiment-cookbook.md` before creating future experiments.
 
 Existing root `nohup.out` was present before scaffold work and should remain untracked/ignored unless the user asks to clean it.
 
@@ -62,11 +64,11 @@ Run `git status --short --untracked-files=all` for the current truth before maki
 
 ## Todo Snapshot
 
-Current todos:
+Current root todos:
 
 - `001` — `todos/001-done-p2-seed-first-experiments.md`: completed by seeding the first two Core Data experiments.
-- `002` — `todos/002-pending-p2-spike-core-data-rest-layer.md`: create the first runnable REST-layer spike.
-- `003` — `todos/003-pending-p2-spike-core-data-graph-db.md`: create the first runnable graph database spike.
+- `002` — `todos/002-pending-p2-spike-core-data-rest-layer.md`: create the first runnable REST-layer spike. Local breakdown now exists under `experiments/core-data-rest-layer/todos/`.
+- `003` — `todos/003-pending-p2-spike-core-data-graph-db.md`: create the first runnable graph database spike. Local breakdown now exists under `experiments/core-data-graph-db/todos/`.
 
 ## Repository Decisions
 
@@ -82,10 +84,10 @@ Current todos:
 
 ## Likely Next Actions
 
-1. Pick one Core Data experiment and create its first runnable Swift spike.
-2. Decide whether `experiments/README.md` should stay a manual catalog, become generated, or both.
-3. Add a small script only if experiment indexing becomes annoying by hand.
-4. Create plans only for experiments that are more than a quick toy.
+1. For either Core Data experiment, read its local `AGENTS.md` + `docs/HANDOFF.md`, then write the first spike plan named by local todo `001`.
+2. Pick one Core Data experiment and create its first runnable Swift spike.
+3. Decide whether `experiments/README.md` should stay a manual catalog, become generated, or both.
+4. Add a small script only if experiment indexing becomes annoying by hand.
 
 ## Notes for Future Agents
 

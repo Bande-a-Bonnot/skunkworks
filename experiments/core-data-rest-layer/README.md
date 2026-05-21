@@ -84,6 +84,13 @@ Build a small Swift package or app that can:
 4. Apply remote updates and local edits.
 5. Document where Core Data helps vs where it fights the API boundary.
 
+## Local Project Files
+
+- `AGENTS.md` — local agent instructions.
+- `docs/HANDOFF.md` — current state and exact next action.
+- `docs/initial-questions.md` — question bank.
+- `todos/` — local task breakdown.
+
 ## Quick Start
 
 No runnable code yet.
