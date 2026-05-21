@@ -6,6 +6,8 @@ One directory per experiment. Keep experiments self-contained and documented eno
 
 | Slug | Status | Description |
 |------|--------|-------------|
+| `core-data-rest-layer` | idea | Explore Core Data as an object graph/change-tracking layer over REST APIs instead of local/CloudKit persistence. |
+| `core-data-graph-db` | idea | Implement graph database primitives and algorithms, including Dijkstra, using Core Data. |
 | `_template` | template | Copyable starter for new experiments. |
 
 ## Status Vocabulary

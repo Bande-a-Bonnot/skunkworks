@@ -36,10 +36,15 @@ Initial repo scaffolding has been created:
 - `AGENTS.md` with repo-specific agent instructions.
 - `README.md` with the repo purpose and quick-start layout.
 - `docs/` with handoff plus category directories and initial repo-shape brainstorm.
-- `todos/` with todo conventions and initial follow-up task.
-- `experiments/` with a README and copyable `_template/` experiment directory.
+- `todos/` with todo conventions and initial follow-up tasks.
+- `experiments/` with a README, copyable `_template/`, and two seeded Core Data experiment directories.
 - `docs/runbooks/create-experiment.md` and `docs/runbooks/graduate-or-archive-experiment.md` for common lifecycle tasks.
 - `.gitignore` for common local/generated/secret files.
+
+Seeded experiments:
+
+- `experiments/core-data-rest-layer/` — Core Data as an object graph/change-tracking layer over REST APIs.
+- `experiments/core-data-graph-db/` — graph database primitives and algorithms, including Dijkstra, using Core Data.
 
 Existing root `nohup.out` was present before scaffold work and should remain untracked/ignored unless the user asks to clean it.
 
@@ -57,9 +62,11 @@ Run `git status --short --untracked-files=all` for the current truth before maki
 
 ## Todo Snapshot
 
-Initial todo:
+Current todos:
 
-- `001` — `todos/001-pending-p2-seed-first-experiments.md`: add the first real experiment directories and fill the catalog.
+- `001` — `todos/001-done-p2-seed-first-experiments.md`: completed by seeding the first two Core Data experiments.
+- `002` — `todos/002-pending-p2-spike-core-data-rest-layer.md`: create the first runnable REST-layer spike.
+- `003` — `todos/003-pending-p2-spike-core-data-graph-db.md`: create the first runnable graph database spike.
 
 ## Repository Decisions
 
@@ -75,8 +82,8 @@ Initial todo:
 
 ## Likely Next Actions
 
-1. Add the first batch of real experiment directories.
-2. Decide whether `experiments/README.md` should be a manual catalog, generated catalog, or both.
+1. Pick one Core Data experiment and create its first runnable Swift spike.
+2. Decide whether `experiments/README.md` should stay a manual catalog, become generated, or both.
 3. Add a small script only if experiment indexing becomes annoying by hand.
 4. Create plans only for experiments that are more than a quick toy.
 
