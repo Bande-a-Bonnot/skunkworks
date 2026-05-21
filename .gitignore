@@ -1,0 +1,41 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs / local process output
+*.log
+nohup.out
+
+# Environment / credentials
+.env
+.env.*
+!.env.example
+credentials/
+*.credentials.txt
+
+# Local scratch / generated outputs
+tmp/
+temp/
+build/
+dist/
+out/
+.cache/
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Dependencies commonly used by experiments
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.target/
+target/
+
+# Pi / agent local artifacts
+.pi/
