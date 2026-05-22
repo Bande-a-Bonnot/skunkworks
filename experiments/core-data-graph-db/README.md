@@ -92,6 +92,7 @@ From this directory:
 ```bash
 swift test
 swift run -c release CoreDataGraphDBBenchmark --store both
+swift run -c release CoreDataGraphDBBenchmark --store both --format csv
 ```
 
 The package uses a programmatic Core Data model and an in-memory store for the first spike.

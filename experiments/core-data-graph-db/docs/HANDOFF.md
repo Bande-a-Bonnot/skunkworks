@@ -27,7 +27,7 @@ Implemented:
 - Dijkstra over live managed-object relationships.
 - Dijkstra over value-type adjacency snapshots.
 - Unit tests for model creation, BFS, Dijkstra, unreachable targets, and grid seeding.
-- Benchmark executable comparing managed traversal with snapshot traversal across in-memory and SQLite-backed stores.
+- Benchmark executable comparing managed traversal with snapshot traversal across in-memory and SQLite-backed stores. Default output is a readable Markdown-style table; `--format csv` is available for machine-readable output.
 
 Key files:
 
@@ -71,21 +71,21 @@ cd experiments/core-data-graph-db
 swift test
 swift run CoreDataGraphDBBenchmark --store both
 swift run -c release CoreDataGraphDBBenchmark --store both
+swift run -c release CoreDataGraphDBBenchmark --store both --format csv
 ```
 
 All passed.
 
 Release benchmark snapshot:
 
-```text
-store,case,nodes,edges,seed_ms,snapshot_ms,managed_bfs_ms,snapshot_bfs_ms,managed_dijkstra_ms,snapshot_dijkstra_ms,path_weight
-in-memory,small,100,180,1.731,0.419,0.183,0.024,0.257,0.110,59.000
-in-memory,medium,625,1200,8.896,2.335,0.992,0.126,2.227,1.221,168.000
-in-memory,large,2500,4900,34.875,10.021,4.021,0.508,12.593,8.893,343.000
-sqlite,small,100,180,54.837,0.351,0.600,0.023,0.240,0.114,59.000
-sqlite,medium,625,1200,156.600,1.881,3.369,0.196,2.397,1.433,168.000
-sqlite,large,2500,4900,73.229,5.293,12.434,0.484,12.185,9.085,343.000
-```
+| Store     | Case   | Nodes | Edges | Seed ms | Snapshot ms | BFS managed ms | BFS snapshot ms | Dijkstra managed ms | Dijkstra snapshot ms | Path weight |
+| --------- | ------ | ----: | ----: | ------: | ----------: | -------------: | --------------: | ------------------: | -------------------: | ----------: |
+| in-memory | small  |   100 |   180 |   1.713 |       0.418 |          0.171 |           0.020 |               0.254 |                0.110 |      59.000 |
+| in-memory | medium |   625 |  1200 |   9.249 |       2.304 |          0.960 |           0.119 |               2.058 |                1.193 |     168.000 |
+| in-memory | large  |  2500 |  4900 |  33.294 |       9.595 |          3.783 |           0.650 |              13.153 |                8.472 |     343.000 |
+| sqlite    | small  |   100 |   180 |  43.671 |       0.331 |          0.536 |           0.021 |               0.232 |                0.107 |      59.000 |
+| sqlite    | medium |   625 |  1200 |  34.420 |       1.633 |          2.949 |           0.122 |               1.994 |                1.150 |     168.000 |
+| sqlite    | large  |  2500 |  4900 |  68.089 |       5.371 |         12.761 |           0.498 |              12.383 |                8.952 |     343.000 |
 
 ## Open Questions
 
