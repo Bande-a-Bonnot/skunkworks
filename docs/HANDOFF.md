@@ -22,72 +22,65 @@ The guiding balance: enough structure for discoverability and handoff, not enoug
    git status --short --untracked-files=all
    git log --date=short --pretty=format:'%h %ad %s' -12
    ```
-3. Review todo state:
+3. Review root todo state:
    ```bash
    find todos -maxdepth 1 -type f -name '*.md' | sort
    ```
-4. If working inside an experiment, read `experiments/<slug>/README.md` and any nested `AGENTS.md`.
-5. Update this handoff when setup, todo state, or experiment status changes materially.
+4. If working inside an experiment, read that experiment's local `AGENTS.md` and `docs/HANDOFF.md`.
+5. Update this handoff only for repo-level state, active experiment pointers, or skunkworks process changes. Keep experiment-specific detail in experiment-local handoffs.
 
-## Current State
+## Repository State
 
-Initial repo scaffolding has been created:
+Repo scaffold is in place:
 
-- `AGENTS.md` with repo-specific agent instructions.
-- `README.md` with the repo purpose and quick-start layout.
-- `docs/` with handoff plus category directories and initial repo-shape brainstorm.
-- `todos/` with todo conventions and initial follow-up tasks.
-- `experiments/` with a README, copyable `_template/`, and two seeded Core Data experiment directories.
-- `docs/runbooks/new-skunkwork-experiment-cookbook.md`, `docs/runbooks/create-experiment.md`, and `docs/runbooks/graduate-or-archive-experiment.md` for common lifecycle tasks.
-- `.gitignore` for common local/generated/secret files.
+- `AGENTS.md` — repo-level agent instructions.
+- `README.md` — repo purpose and layout.
+- `docs/` — repo-level handoff, brainstorms, plans, runbooks, and solutions.
+- `docs/runbooks/new-skunkwork-experiment-cookbook.md` — playbook for new experiments.
+- `experiments/` — one directory per experiment, plus `_template/`.
+- `todos/` — root/cross-experiment todo records.
+- `.gitignore` — common local/generated/secret files.
 
-Seeded experiments:
+No repo-level build system is chosen. Experiments own their local tooling.
 
-- `experiments/core-data-rest-layer/` — Core Data as an object graph/change-tracking layer over REST APIs. Has local `AGENTS.md`, `docs/HANDOFF.md`, docs sections, and local todos.
-- `experiments/core-data-graph-db/` — graph database primitives and algorithms, including Dijkstra, using Core Data. First runnable Swift package spike is complete with BFS, Dijkstra, tests, and benchmarks comparing no-prefetch managed traversal, relationship-prefetched managed traversal, and snapshot traversal across in-memory and SQLite-backed stores. A future SPM-library API plan is documented and parked.
+Existing root `nohup.out` was present from before setup and is ignored. Do not delete it unless the user asks.
 
-Experiment template now includes local `AGENTS.md`, `docs/HANDOFF.md`, docs sections, and `todos/README.md`. Use `docs/runbooks/new-skunkwork-experiment-cookbook.md` before creating future experiments.
+## Active / Parked Experiments
 
-Existing root `nohup.out` was present before scaffold work and should remain untracked/ignored unless the user asks to clean it.
+Active / next up:
 
-## Current Branch / Git Snapshot
+- `experiments/core-data-rest-layer/` — read `experiments/core-data-rest-layer/docs/HANDOFF.md`.
 
-Last inspected during scaffold setup:
+Parked / optional follow-up:
 
-```text
-branch: main
-remote: https://github.com/Bande-a-Bonnot/skunkworks
-pre-existing untracked: nohup.out
-```
+- `experiments/core-data-graph-db/` — read `experiments/core-data-graph-db/docs/HANDOFF.md`.
 
-Run `git status --short --untracked-files=all` for the current truth before making changes.
+Catalog:
 
-## Todo Snapshot
+- `experiments/README.md`
 
-Current root todos:
+## Root Todo Snapshot
 
-- `001` — `todos/001-done-p2-seed-first-experiments.md`: completed by seeding the first two Core Data experiments.
-- `002` — `todos/002-pending-p2-spike-core-data-rest-layer.md`: create the first runnable REST-layer spike. Local breakdown now exists under `experiments/core-data-rest-layer/todos/`.
-- `003` — `todos/003-done-p2-spike-core-data-graph-db.md`: completed first runnable graph database spike with benchmarks. Local follow-ups now exist under `experiments/core-data-graph-db/todos/`.
+Root todos track repo-level or cross-experiment work only. Experiment-specific work belongs in each experiment's local `todos/` directory.
+
+- `001` — `todos/001-done-p2-seed-first-experiments.md`
+- `002` — `todos/002-pending-p2-spike-core-data-rest-layer.md`
+- `003` — `todos/003-done-p2-spike-core-data-graph-db.md`
 
 ## Repository Decisions
 
 - Experiment roots live under `experiments/<slug>/`.
+- Each experiment should have local `AGENTS.md`, `docs/HANDOFF.md`, docs sections, and local todos.
 - `experiments/_template/` is intentionally committed as a copyable starting point.
-- Cross-experiment docs use the sibling-project pattern:
-  - `docs/brainstorms/`
-  - `docs/plans/`
-  - `docs/solutions/`
-  - `docs/runbooks/`
-- Todo records live as markdown files in `todos/` with frontmatter.
-- No monorepo-level build system has been chosen. Experiments may use their own local tooling.
+- Root docs should stay about Skunkworks process/repo concerns, not detailed experiment implementation notes.
+- Use experiment-local docs for detailed plans, findings, and handoffs.
+- Todo records live as markdown files with frontmatter.
 
 ## Likely Next Actions
 
-1. For `core-data-rest-layer`, read its local `AGENTS.md` + `docs/HANDOFF.md`, then write the first spike plan named by local todo `001`.
-2. For `core-data-graph-db`, optional next follow-ups are repeated benchmark runs or random graph fixtures.
-3. Decide whether `experiments/README.md` should stay a manual catalog, become generated, or both.
-4. Add a small script only if experiment indexing becomes annoying by hand.
+1. Work on `core-data-rest-layer` local todo `002`: embedded REST server -> URLSession client -> Core Data projection.
+2. Keep root handoff minimal; update experiment-local handoff with implementation details.
+3. Decide later whether `experiments/README.md` should stay a manual catalog, become generated, or both.
 
 ## Notes for Future Agents
 

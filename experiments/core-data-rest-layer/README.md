@@ -78,11 +78,14 @@ Relationship:
 
 Build a small Swift package or app that can:
 
-1. Define a Core Data model for projects/tasks.
-2. Read fixtures pretending to be REST responses.
-3. Expose data through `NSManagedObjectContext` fetches.
-4. Apply remote updates and local edits.
-5. Document where Core Data helps vs where it fights the API boundary.
+1. Start an embedded local REST server bound to `127.0.0.1:0`.
+2. Fetch projects/tasks through `URLSession`.
+3. Project server resources into a Core Data model for projects/tasks.
+4. Expose data through `NSManagedObjectContext` fetches and relationships.
+5. Apply local edits and push them back with version/conflict handling.
+6. Document where Core Data helps vs where it fights the API boundary.
+
+Plan: `docs/plans/2026-05-22-core-data-rest-layer-first-spike-plan.md`.
 
 ## Local Project Files
 
@@ -99,23 +102,26 @@ Suggested first implementation shape:
 
 ```bash
 # from this directory, once created
-swift package init --type executable
+swift package init
 ```
 
-Then add a Core Data model programmatically or as a checked-in `.xcdatamodeld` if an app target becomes useful.
+Then add a Core Data model and an embedded test REST server as described in the first-spike plan.
 
 ## Notes / Findings
 
 - Core Data's precise phrase is "object graph and persistence framework". This experiment should lean on the object graph part and interrogate the persistence part.
 - Avoid building a full generic REST ORM. Keep the first API tiny and concrete.
 - Treat REST as remote truth with its own semantics, not as a lossy SQL endpoint.
+- Prefer an embedded local server over static fixtures so tests exercise real HTTP semantics.
 
 ## Next Ideas
 
-- [ ] Decide first spike approach: custom store, materialized projection, or hybrid.
+- [x] Decide first spike approach: embedded REST server plus Core Data materialized projection.
 - [ ] Create minimal Swift package/app harness.
 - [ ] Model project/task resources.
-- [ ] Simulate latency, pagination, stale reads, and conflicts.
+- [ ] Implement embedded local REST server.
+- [ ] Simulate stale writes/conflicts.
+- [ ] Later: simulate latency and pagination.
 - [ ] Write down which Core Data features remain pleasant over REST.
 
 ## Cleanup / Graduation

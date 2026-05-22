@@ -14,8 +14,9 @@ Create the first runnable spike for `experiments/core-data-rest-layer/`.
 
 - A minimal Swift harness exists in the experiment directory.
 - The harness models a tiny remote domain, likely `Project` and `Task`.
-- It demonstrates loading REST-like fixture data into or through Core Data.
-- It demonstrates a local edit/change-tracking flow.
+- It starts an embedded local REST server for tests/demo usage.
+- It syncs server data into or through Core Data.
+- It demonstrates a local edit/change-tracking flow and stale-write conflict handling.
 - Findings are recorded in the experiment README or a local docs file.
 
 ## Notes

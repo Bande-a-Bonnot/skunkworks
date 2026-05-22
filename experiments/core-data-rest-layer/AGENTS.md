@@ -23,6 +23,7 @@ This experiment explores Core Data as an object graph / identity / change-tracki
 
 - Prefer the first spike to be concrete and small.
 - Do **not** start by building a generic REST ORM.
+- Use an embedded local REST server for the first runnable spike so tests exercise real HTTP semantics.
 - Treat REST as remote source of truth with its own semantics, not as SQL-over-HTTP.
 - Compare approaches honestly:
   - local materialized projection;
