@@ -91,7 +91,7 @@ From this directory:
 
 ```bash
 swift test
-swift run -c release CoreDataGraphDBBenchmark
+swift run -c release CoreDataGraphDBBenchmark --store both
 ```
 
 The package uses a programmatic Core Data model and an in-memory store for the first spike.
@@ -102,7 +102,8 @@ The package uses a programmatic Core Data model and an in-memory store for the f
 - The interesting question is whether Core Data's relationship management gives enough leverage for app-local graph problems.
 - First spike implemented BFS and Dijkstra over both live managed-object relationships and a value snapshot.
 - Early benchmark read: Core Data is comfortable for identity/persistence/relationship integrity; snapshots are cleaner and faster for algorithmic hot paths.
-- Detailed findings: `docs/solutions/2026-05-21-first-spike-benchmark-findings.md`.
+- Detailed first-spike findings: `docs/solutions/2026-05-21-first-spike-benchmark-findings.md`.
+- SQLite vs in-memory findings: `docs/solutions/2026-05-22-sqlite-vs-in-memory-benchmark-findings.md`.
 
 ## Next Ideas
 
@@ -113,7 +114,7 @@ The package uses a programmatic Core Data model and an in-memory store for the f
 - [x] Implement BFS.
 - [x] Implement Dijkstra.
 - [x] Benchmark or at least instrument fault/fetch behavior.
-- [ ] Compare in-memory and SQLite-backed stores.
+- [x] Compare in-memory and SQLite-backed stores.
 - [ ] Add relationship prefetch experiments.
 
 ## Cleanup / Graduation

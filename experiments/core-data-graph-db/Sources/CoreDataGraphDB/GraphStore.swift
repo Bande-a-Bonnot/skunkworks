@@ -13,10 +13,11 @@ public final class GraphStore {
         container.viewContext
     }
 
-    public init(storeType: String = NSInMemoryStoreType) throws {
+    public init(storeType: String = NSInMemoryStoreType, storeURL: URL? = nil) throws {
         container = NSPersistentContainer(name: "CoreDataGraphDB", managedObjectModel: CoreDataGraphModel.makeModel())
         let description = NSPersistentStoreDescription()
         description.type = storeType
+        description.url = storeURL
         description.shouldAddStoreAsynchronously = false
         container.persistentStoreDescriptions = [description]
 

@@ -6,8 +6,10 @@
 
 ```bash
 swift test
-swift run -c release CoreDataGraphDBBenchmark
+swift run -c release CoreDataGraphDBBenchmark --store in-memory
 ```
+
+Note: this document preserves the first-spike benchmark before the later SQLite comparison added a context reset and a `store` column. See `2026-05-22-sqlite-vs-in-memory-benchmark-findings.md` for current benchmark output.
 
 ## What Was Built
 

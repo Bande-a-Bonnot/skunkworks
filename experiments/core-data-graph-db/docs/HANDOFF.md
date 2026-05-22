@@ -27,7 +27,7 @@ Implemented:
 - Dijkstra over live managed-object relationships.
 - Dijkstra over value-type adjacency snapshots.
 - Unit tests for model creation, BFS, Dijkstra, unreachable targets, and grid seeding.
-- Benchmark executable comparing managed traversal with snapshot traversal.
+- Benchmark executable comparing managed traversal with snapshot traversal across in-memory and SQLite-backed stores.
 
 Key files:
 
@@ -37,6 +37,7 @@ Key files:
 - `Tests/CoreDataGraphDBTests/`
 - `docs/plans/2026-05-21-core-data-graph-db-first-spike-plan.md`
 - `docs/solutions/2026-05-21-first-spike-benchmark-findings.md`
+- `docs/solutions/2026-05-22-sqlite-vs-in-memory-benchmark-findings.md`
 
 ## Working Direction
 
@@ -47,7 +48,7 @@ Core Data is useful as a persistent object graph / identity / relationship-integ
 Algorithmic hot paths should probably run over value snapshots.
 ```
 
-Snapshot traversal is cleaner and faster in the first release benchmark. Managed-object traversal is still pleasant and adequate for small graphs.
+Snapshot traversal is cleaner and faster in the release benchmarks. Managed-object traversal is still pleasant and adequate for small graphs. SQLite primarily changes write/seed cost and fault-backed relationship traversal; snapshot algorithm runtime is mostly store-agnostic after the snapshot exists.
 
 ## Local Todos
 
@@ -59,7 +60,6 @@ Done:
 
 Pending:
 
-- `004` — `todos/004-pending-p2-compare-sqlite-backed-store.md`
 - `005` — `todos/005-pending-p2-prefetch-relationship-traversal-benchmark.md`
 
 ## Verification
@@ -69,8 +69,8 @@ Last verified on 2026-05-22:
 ```bash
 cd experiments/core-data-graph-db
 swift test
-swift run CoreDataGraphDBBenchmark
-swift run -c release CoreDataGraphDBBenchmark
+swift run CoreDataGraphDBBenchmark --store both
+swift run -c release CoreDataGraphDBBenchmark --store both
 ```
 
 All passed.
@@ -78,22 +78,21 @@ All passed.
 Release benchmark snapshot:
 
 ```text
-case,nodes,edges,snapshot_ms,managed_bfs_ms,snapshot_bfs_ms,managed_dijkstra_ms,snapshot_dijkstra_ms,path_weight
-small,100,180,0.167,0.118,0.021,0.209,0.115,59.000
-medium,625,1200,0.657,0.638,0.116,1.779,1.220,168.000
-large,2500,4900,2.860,2.540,0.502,10.878,8.403,343.000
+store,case,nodes,edges,seed_ms,snapshot_ms,managed_bfs_ms,snapshot_bfs_ms,managed_dijkstra_ms,snapshot_dijkstra_ms,path_weight
+in-memory,small,100,180,1.731,0.419,0.183,0.024,0.257,0.110,59.000
+in-memory,medium,625,1200,8.896,2.335,0.992,0.126,2.227,1.221,168.000
+in-memory,large,2500,4900,34.875,10.021,4.021,0.508,12.593,8.893,343.000
+sqlite,small,100,180,54.837,0.351,0.600,0.023,0.240,0.114,59.000
+sqlite,medium,625,1200,156.600,1.881,3.369,0.196,2.397,1.433,168.000
+sqlite,large,2500,4900,73.229,5.293,12.434,0.484,12.185,9.085,343.000
 ```
 
 ## Open Questions
 
-- How do results change with a SQLite-backed store?
 - Does relationship prefetching materially improve managed traversal?
 - What graph sizes make snapshot build cost meaningful?
 - Should the next algorithm be connected components, cycle detection, topological sort, or A*?
 
 ## Next Action
 
-Pick one pending benchmark follow-up:
-
-1. SQLite-backed store comparison (`todo 004`), or
-2. relationship-prefetch benchmark (`todo 005`).
+Run the relationship-prefetch benchmark follow-up (`todo 005`).

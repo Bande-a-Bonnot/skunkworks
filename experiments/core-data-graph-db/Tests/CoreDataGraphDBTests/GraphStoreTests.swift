@@ -35,4 +35,24 @@ final class GraphStoreTests: XCTestCase {
         XCTAssertEqual(grid.start.label, "n0_0")
         XCTAssertEqual(grid.target.label, "n2_3")
     }
+
+    func testSQLiteBackedStoreCanPersistAndRefetchGraph() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CoreDataGraphDBTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let store = try GraphStore(
+            storeType: NSSQLiteStoreType,
+            storeURL: directory.appendingPathComponent("graph.sqlite")
+        )
+        let grid = try store.seedGrid(rows: 2, columns: 2)
+        let startLabel = grid.start.label!
+
+        store.context.reset()
+        let refetched = try store.requireNode(label: startLabel)
+
+        XCTAssertEqual(refetched.label, "n0_0")
+        XCTAssertEqual(refetched.outgoingEdges.count, 2)
+    }
 }
