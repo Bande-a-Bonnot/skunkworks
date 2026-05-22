@@ -1,7 +1,7 @@
 # Skunkworks Session Handoff
 
 **URN:** `skunkworks::local::docs::handoff::019e4c5b-d963-7fda-96c7-1f399cdad092`  
-**Last updated:** 2026-05-21  
+**Last updated:** 2026-05-22  
 **Update this before context compaction or at the end of meaningful sessions.**
 
 Read this after `AGENTS.md` at the start of every Skunkworks session.
@@ -44,7 +44,7 @@ Initial repo scaffolding has been created:
 Seeded experiments:
 
 - `experiments/core-data-rest-layer/` — Core Data as an object graph/change-tracking layer over REST APIs. Has local `AGENTS.md`, `docs/HANDOFF.md`, docs sections, and local todos.
-- `experiments/core-data-graph-db/` — graph database primitives and algorithms, including Dijkstra, using Core Data. Has local `AGENTS.md`, `docs/HANDOFF.md`, docs sections, and local todos.
+- `experiments/core-data-graph-db/` — graph database primitives and algorithms, including Dijkstra, using Core Data. First runnable Swift package spike is complete with BFS, Dijkstra, tests, and benchmarks comparing managed-object traversal to snapshot traversal.
 
 Experiment template now includes local `AGENTS.md`, `docs/HANDOFF.md`, docs sections, and `todos/README.md`. Use `docs/runbooks/new-skunkwork-experiment-cookbook.md` before creating future experiments.
 
@@ -68,7 +68,7 @@ Current root todos:
 
 - `001` — `todos/001-done-p2-seed-first-experiments.md`: completed by seeding the first two Core Data experiments.
 - `002` — `todos/002-pending-p2-spike-core-data-rest-layer.md`: create the first runnable REST-layer spike. Local breakdown now exists under `experiments/core-data-rest-layer/todos/`.
-- `003` — `todos/003-pending-p2-spike-core-data-graph-db.md`: create the first runnable graph database spike. Local breakdown now exists under `experiments/core-data-graph-db/todos/`.
+- `003` — `todos/003-done-p2-spike-core-data-graph-db.md`: completed first runnable graph database spike with benchmarks. Local follow-ups now exist under `experiments/core-data-graph-db/todos/`.
 
 ## Repository Decisions
 
@@ -84,8 +84,8 @@ Current root todos:
 
 ## Likely Next Actions
 
-1. For either Core Data experiment, read its local `AGENTS.md` + `docs/HANDOFF.md`, then write the first spike plan named by local todo `001`.
-2. Pick one Core Data experiment and create its first runnable Swift spike.
+1. For `core-data-rest-layer`, read its local `AGENTS.md` + `docs/HANDOFF.md`, then write the first spike plan named by local todo `001`.
+2. For `core-data-graph-db`, choose a benchmark follow-up: SQLite-backed store comparison or relationship-prefetch traversal.
 3. Decide whether `experiments/README.md` should stay a manual catalog, become generated, or both.
 4. Add a small script only if experiment indexing becomes annoying by hand.
 

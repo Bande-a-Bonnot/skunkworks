@@ -4,7 +4,7 @@
 
 ## Status
 
-`idea`
+`spike`
 
 ## Why
 
@@ -87,32 +87,34 @@ Build a tiny Swift command-line package or test target that:
 
 ## Quick Start
 
-No runnable code yet.
-
-Suggested first implementation shape:
+From this directory:
 
 ```bash
-# from this directory, once created
-swift package init --type executable
+swift test
+swift run -c release CoreDataGraphDBBenchmark
 ```
 
-A pure Swift package with a programmatic Core Data model is probably enough for the first spike.
+The package uses a programmatic Core Data model and an in-memory store for the first spike.
 
 ## Notes / Findings
 
 - This is not trying to beat real graph databases.
 - The interesting question is whether Core Data's relationship management gives enough leverage for app-local graph problems.
-- Dijkstra may be cleaner over a snapshot adjacency list than live `NSManagedObject` faults; test both.
+- First spike implemented BFS and Dijkstra over both live managed-object relationships and a value snapshot.
+- Early benchmark read: Core Data is comfortable for identity/persistence/relationship integrity; snapshots are cleaner and faster for algorithmic hot paths.
+- Detailed findings: `docs/solutions/2026-05-21-first-spike-benchmark-findings.md`.
 
 ## Next Ideas
 
-- [ ] Choose directed vs mixed graph representation.
-- [ ] Create Swift package harness.
-- [ ] Implement programmatic Core Data model.
-- [ ] Seed sample graph fixtures.
-- [ ] Implement BFS.
-- [ ] Implement Dijkstra.
-- [ ] Benchmark or at least instrument fault/fetch behavior.
+- [x] Choose directed vs mixed graph representation.
+- [x] Create Swift package harness.
+- [x] Implement programmatic Core Data model.
+- [x] Seed sample graph fixtures.
+- [x] Implement BFS.
+- [x] Implement Dijkstra.
+- [x] Benchmark or at least instrument fault/fetch behavior.
+- [ ] Compare in-memory and SQLite-backed stores.
+- [ ] Add relationship prefetch experiments.
 
 ## Cleanup / Graduation
 
