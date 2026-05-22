@@ -106,6 +106,7 @@ The package uses a programmatic Core Data model and an in-memory store for the f
 - Detailed first-spike findings: `docs/solutions/2026-05-21-first-spike-benchmark-findings.md`.
 - SQLite vs in-memory findings: `docs/solutions/2026-05-22-sqlite-vs-in-memory-benchmark-findings.md`.
 - Relationship prefetch findings: `docs/solutions/2026-05-22-relationship-prefetch-benchmark-findings.md`.
+- Parked SPM library API direction: `docs/plans/2026-05-22-experimental-spm-library-api-plan.md`.
 
 ## Next Ideas
 

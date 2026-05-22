@@ -41,6 +41,7 @@ Key files:
 - `docs/plans/2026-05-21-core-data-graph-db-first-spike-plan.md`
 - `docs/plans/2026-05-22-sqlite-store-benchmark-plan.md`
 - `docs/plans/2026-05-22-prefetch-benchmark-plan.md`
+- `docs/plans/2026-05-22-experimental-spm-library-api-plan.md` — parked future direction for turning the spike into a reusable SPM library.
 - `docs/solutions/2026-05-21-first-spike-benchmark-findings.md`
 - `docs/solutions/2026-05-22-sqlite-vs-in-memory-benchmark-findings.md`
 - `docs/solutions/2026-05-22-relationship-prefetch-benchmark-findings.md`
@@ -71,6 +72,10 @@ Pending:
 
 - `006` — `todos/006-pending-p2-add-repeated-benchmark-runs.md`
 - `007` — `todos/007-pending-p2-add-random-graph-fixtures.md`
+
+Deferred:
+
+- `008` — `todos/008-deferred-p2-experimental-spm-library-api.md`
 
 ## Verification
 
@@ -105,4 +110,4 @@ Release benchmark snapshot:
 
 ## Next Action
 
-Recommended next step: switch to `core-data-rest-layer` and write its first spike plan. If continuing this experiment first, do either repeated benchmark runs (`todo 006`) or random graph fixtures (`todo 007`).
+Recommended next step: switch to `core-data-rest-layer` and write its first spike plan. The SPM library API idea is documented and intentionally parked in `docs/plans/2026-05-22-experimental-spm-library-api-plan.md`.

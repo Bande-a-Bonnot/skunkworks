@@ -44,7 +44,7 @@ Initial repo scaffolding has been created:
 Seeded experiments:
 
 - `experiments/core-data-rest-layer/` — Core Data as an object graph/change-tracking layer over REST APIs. Has local `AGENTS.md`, `docs/HANDOFF.md`, docs sections, and local todos.
-- `experiments/core-data-graph-db/` — graph database primitives and algorithms, including Dijkstra, using Core Data. First runnable Swift package spike is complete with BFS, Dijkstra, tests, and benchmarks comparing no-prefetch managed traversal, relationship-prefetched managed traversal, and snapshot traversal across in-memory and SQLite-backed stores.
+- `experiments/core-data-graph-db/` — graph database primitives and algorithms, including Dijkstra, using Core Data. First runnable Swift package spike is complete with BFS, Dijkstra, tests, and benchmarks comparing no-prefetch managed traversal, relationship-prefetched managed traversal, and snapshot traversal across in-memory and SQLite-backed stores. A future SPM-library API plan is documented and parked.
 
 Experiment template now includes local `AGENTS.md`, `docs/HANDOFF.md`, docs sections, and `todos/README.md`. Use `docs/runbooks/new-skunkwork-experiment-cookbook.md` before creating future experiments.
 
