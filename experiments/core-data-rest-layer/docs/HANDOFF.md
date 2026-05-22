@@ -14,21 +14,24 @@ Explore whether Core Data is useful as an object graph, identity map, validation
 
 ## Current State
 
-Documentation/planning seed exists. No runnable Swift harness exists yet.
+First runnable Swift spike exists and passes tests.
+
+Implemented package:
+
+- `Package.swift`
+- `Sources/CoreDataRESTLayer/RemoteModels.swift` — JSON domain models and shared JSON coding.
+- `Sources/CoreDataRESTLayer/RESTClient.swift` — `URLSession` client for `GET /projects`, `GET /projects/{projectID}/tasks`, and `PATCH /tasks/{taskID}`.
+- `Sources/CoreDataRESTLayer/CoreDataStack.swift` — programmatic Core Data model with `CDProject` / `CDTask`, relationship, version, dirty, and conflict metadata.
+- `Sources/CoreDataRESTLayer/ProjectionSync.swift` — pull projection and dirty-task push/conflict recording.
+- `Sources/CoreDataRESTLayerTestServer/EmbeddedRESTServer.swift` — dependency-free `Network.framework` local HTTP server bound to `127.0.0.1:0`.
+- `Tests/CoreDataRESTLayerTests/CoreDataRESTLayerTests.swift` — acceptance tests for sync/edit/push and stale-write conflict flows.
 
 Current docs:
 
-- `README.md` describes the experiment, hypotheses, candidate approaches, and first spike.
+- `README.md` describes the experiment, quick start, and first findings.
 - `docs/initial-questions.md` captures conceptual/API/Core Data questions.
-- `docs/plans/2026-05-22-core-data-rest-layer-first-spike-plan.md` defines the first runnable spike.
-
-Local agent/process scaffold exists:
-
-- `AGENTS.md`
-- `docs/HANDOFF.md`
-- `docs/README.md`
-- `docs/{brainstorms,plans,solutions,runbooks}/`
-- `todos/README.md`
+- `docs/plans/2026-05-22-core-data-rest-layer-first-spike-plan.md` defines the implemented first spike.
+- `docs/solutions/2026-05-22-first-projection-spike-findings.md` records initial findings.
 
 ## Working Direction
 
@@ -47,10 +50,7 @@ The embedded server should bind to `127.0.0.1:0` in tests and provide determinis
 Done:
 
 - `001` — `todos/001-done-p1-write-first-spike-plan.md`
-
-Ready:
-
-- `002` — `todos/002-ready-p1-build-embedded-server-projection.md`
+- `002` — `todos/002-done-p1-build-embedded-server-projection.md`
 
 Pending:
 
@@ -59,23 +59,29 @@ Pending:
 
 ## Open Questions
 
-- Which tiny server dependency, if any, should be used for the embedded REST server?
-- Should first conflict handling use explicit integer `version` fields or HTTP `ETag` / `If-Match`?
-- Where should remote loading/error/conflict state live in the Core Data model?
-- Should local edits be represented as dirty flags on managed objects, separate pending-change entities, or child-context units of work?
-- After the projection spike, does a custom persistent store still seem worth exploring?
+Resolved for first spike:
+
+- Server dependency: none; the embedded test server uses `Network.framework` plus tiny HTTP parsing.
+- Conflict mechanism: explicit integer `version` fields.
+- First conflict state location: `CDTask.isDirty`, `CDTask.lastSyncError`, and `CDTask.conflictState`.
+
+Still open:
+
+- Should loading/error/conflict state stay on managed objects, move to separate sync records, or live in caller state as scenarios grow?
+- Should local edits remain dirty flags on managed objects, or become separate pending-change entities / child-context units of work?
+- After pagination and latency pressure tests, does a custom persistent store still seem worth exploring?
 
 ## Verification
 
-Current verification is documentation/catalog consistency only.
-
-Expected first implementation command:
+Passing command:
 
 ```bash
 cd experiments/core-data-rest-layer
 swift test
 ```
 
+Last verified 2026-05-22: 2 XCTest tests passed.
+
 ## Next Action
 
-Implement `todos/002-ready-p1-build-embedded-server-projection.md` following `docs/plans/2026-05-22-core-data-rest-layer-first-spike-plan.md`.
+Pick up `todos/004-pending-p2-add-pagination-and-latency-cases.md` to pressure-test loading/completeness state, or write a follow-up plan before exploring `todos/003-pending-p3-evaluate-custom-persistent-store.md`.

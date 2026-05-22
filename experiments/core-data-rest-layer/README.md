@@ -4,7 +4,7 @@
 
 ## Status
 
-`idea`
+`runnable spike`
 
 ## Why
 
@@ -92,20 +92,20 @@ Plan: `docs/plans/2026-05-22-core-data-rest-layer-first-spike-plan.md`.
 - `AGENTS.md` — local agent instructions.
 - `docs/HANDOFF.md` — current state and exact next action.
 - `docs/initial-questions.md` — question bank.
+- `Package.swift` — Swift package harness.
+- `Sources/CoreDataRESTLayer/` — REST models/client, programmatic Core Data model, projection sync.
+- `Sources/CoreDataRESTLayerTestServer/` — embedded deterministic HTTP server for tests.
+- `Tests/CoreDataRESTLayerTests/` — acceptance tests for sync/edit/push/conflict flows.
 - `todos/` — local task breakdown.
 
 ## Quick Start
 
-No runnable code yet.
-
-Suggested first implementation shape:
-
 ```bash
-# from this directory, once created
-swift package init
+cd experiments/core-data-rest-layer
+swift test
 ```
 
-Then add a Core Data model and an embedded test REST server as described in the first-spike plan.
+The test harness starts an embedded REST server on `127.0.0.1:0`, fetches through `URLSession`, projects remote resources into an in-memory Core Data store, pushes a dirty local task edit, and verifies stale-write conflict handling.
 
 ## Notes / Findings
 
@@ -113,16 +113,18 @@ Then add a Core Data model and an embedded test REST server as described in the 
 - Avoid building a full generic REST ORM. Keep the first API tiny and concrete.
 - Treat REST as remote truth with its own semantics, not as a lossy SQL endpoint.
 - Prefer an embedded local server over static fixtures so tests exercise real HTTP semantics.
+- First finding: a materialized Core Data projection makes app-style relationship/fetch access pleasant after explicit sync, but conflict/loading/error state must stay explicit in the model or surrounding sync layer.
+- First finding: Core Data dirty tracking is useful as a local unit-of-work marker, but versioned REST conflicts should not be hidden behind `save()` semantics.
 
 ## Next Ideas
 
 - [x] Decide first spike approach: embedded REST server plus Core Data materialized projection.
-- [ ] Create minimal Swift package/app harness.
-- [ ] Model project/task resources.
-- [ ] Implement embedded local REST server.
-- [ ] Simulate stale writes/conflicts.
+- [x] Create minimal Swift package/app harness.
+- [x] Model project/task resources.
+- [x] Implement embedded local REST server.
+- [x] Simulate stale writes/conflicts.
 - [ ] Later: simulate latency and pagination.
-- [ ] Write down which Core Data features remain pleasant over REST.
+- [ ] Write down which Core Data features remain pleasant over REST in more detail.
 
 ## Cleanup / Graduation
 

@@ -64,7 +64,7 @@ Catalog:
 Root todos track repo-level or cross-experiment work only. Experiment-specific work belongs in each experiment's local `todos/` directory.
 
 - `001` — `todos/001-done-p2-seed-first-experiments.md`
-- `002` — `todos/002-pending-p2-spike-core-data-rest-layer.md`
+- `002` — `todos/002-done-p2-spike-core-data-rest-layer.md`
 - `003` — `todos/003-done-p2-spike-core-data-graph-db.md`
 
 ## Repository Decisions
@@ -78,7 +78,7 @@ Root todos track repo-level or cross-experiment work only. Experiment-specific w
 
 ## Likely Next Actions
 
-1. Work on `core-data-rest-layer` local todo `002`: embedded REST server -> URLSession client -> Core Data projection.
+1. Continue `core-data-rest-layer` with local todo `004`: pagination and latency pressure cases, or plan the custom-store follow-up (`003`) later.
 2. Keep root handoff minimal; update experiment-local handoff with implementation details.
 3. Decide later whether `experiments/README.md` should stay a manual catalog, become generated, or both.
 
