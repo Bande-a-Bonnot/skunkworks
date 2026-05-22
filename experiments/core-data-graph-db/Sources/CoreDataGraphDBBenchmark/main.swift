@@ -30,6 +30,11 @@ struct Timed<Value> {
     let milliseconds: Double
 }
 
+struct ManagedEndpoints {
+    let start: GraphNode
+    let target: GraphNode
+}
+
 struct BenchmarkResult {
     let store: StoreKind
     let benchmarkCase: BenchmarkCase
@@ -37,9 +42,12 @@ struct BenchmarkResult {
     let edgeCount: Int
     let seedMilliseconds: Double
     let snapshotMilliseconds: Double
+    let prefetchMilliseconds: Double
     let managedBFSMilliseconds: Double
+    let prefetchedBFSMilliseconds: Double
     let snapshotBFSMilliseconds: Double
     let managedDijkstraMilliseconds: Double
+    let prefetchedDijkstraMilliseconds: Double
     let snapshotDijkstraMilliseconds: Double
     let pathWeight: Double
 }
@@ -105,8 +113,22 @@ func cleanupSQLiteArtifacts(for sqliteURL: URL?) {
     try? FileManager.default.removeItem(at: directory)
 }
 
+func endpoints(in store: GraphStore, startLabel: String, targetLabel: String) throws -> ManagedEndpoints {
+    ManagedEndpoints(
+        start: try store.requireNode(label: startLabel),
+        target: try store.requireNode(label: targetLabel)
+    )
+}
+
+func prefetchOutgoingGraph(in context: NSManagedObjectContext) throws {
+    let request = NSFetchRequest<GraphNode>(entityName: CoreDataGraphModel.nodeEntityName)
+    request.relationshipKeyPathsForPrefetching = ["outgoingEdges", "outgoingEdges.target"]
+    request.sortDescriptors = [NSSortDescriptor(key: "label", ascending: true)]
+    _ = try context.fetch(request)
+}
+
 func printCSV(_ results: [BenchmarkResult]) {
-    print("store,case,nodes,edges,seed_ms,snapshot_ms,managed_bfs_ms,snapshot_bfs_ms,managed_dijkstra_ms,snapshot_dijkstra_ms,path_weight")
+    print("store,case,nodes,edges,seed_ms,snapshot_ms,prefetch_ms,managed_bfs_ms,prefetched_bfs_ms,snapshot_bfs_ms,managed_dijkstra_ms,prefetched_dijkstra_ms,snapshot_dijkstra_ms,path_weight")
     for result in results {
         print([
             result.store.rawValue,
@@ -115,9 +137,12 @@ func printCSV(_ results: [BenchmarkResult]) {
             String(result.edgeCount),
             format(result.seedMilliseconds),
             format(result.snapshotMilliseconds),
+            format(result.prefetchMilliseconds),
             format(result.managedBFSMilliseconds),
+            format(result.prefetchedBFSMilliseconds),
             format(result.snapshotBFSMilliseconds),
             format(result.managedDijkstraMilliseconds),
+            format(result.prefetchedDijkstraMilliseconds),
             format(result.snapshotDijkstraMilliseconds),
             format(result.pathWeight),
         ].joined(separator: ","))
@@ -131,10 +156,13 @@ func printTable(_ results: [BenchmarkResult]) {
         "Nodes",
         "Edges",
         "Seed ms",
-        "Snapshot ms",
+        "Snapshot build ms",
+        "Prefetch ms",
         "BFS managed ms",
+        "BFS prefetched ms",
         "BFS snapshot ms",
         "Dijkstra managed ms",
+        "Dijkstra prefetched ms",
         "Dijkstra snapshot ms",
         "Path weight",
     ]
@@ -146,9 +174,12 @@ func printTable(_ results: [BenchmarkResult]) {
             String(result.edgeCount),
             format(result.seedMilliseconds),
             format(result.snapshotMilliseconds),
+            format(result.prefetchMilliseconds),
             format(result.managedBFSMilliseconds),
+            format(result.prefetchedBFSMilliseconds),
             format(result.snapshotBFSMilliseconds),
             format(result.managedDijkstraMilliseconds),
+            format(result.prefetchedDijkstraMilliseconds),
             format(result.snapshotDijkstraMilliseconds),
             format(result.pathWeight),
         ]
@@ -205,37 +236,53 @@ for storeKind in stores {
 
         let startLabel = seed.value.start.label!
         let targetLabel = seed.value.target.label!
-        store.context.reset()
-        let start = try store.requireNode(label: startLabel)
-        let target = try store.requireNode(label: targetLabel)
 
+        store.context.reset()
+        let managedBFSEndpoints = try endpoints(in: store, startLabel: startLabel, targetLabel: targetLabel)
+        let managedBFS = measure {
+            GraphAlgorithms.breadthFirstManaged(from: managedBFSEndpoints.start)
+        }
+
+        store.context.reset()
+        let managedDijkstraEndpoints = try endpoints(in: store, startLabel: startLabel, targetLabel: targetLabel)
+        let managedDijkstra = measure {
+            GraphAlgorithms.dijkstraManaged(from: managedDijkstraEndpoints.start, to: managedDijkstraEndpoints.target)
+        }
+
+        store.context.reset()
+        let prefetch = try measure {
+            try prefetchOutgoingGraph(in: store.context)
+            return try endpoints(in: store, startLabel: startLabel, targetLabel: targetLabel)
+        }
+        let prefetchedBFS = measure {
+            GraphAlgorithms.breadthFirstManaged(from: prefetch.value.start)
+        }
+        let prefetchedDijkstra = measure {
+            GraphAlgorithms.dijkstraManaged(from: prefetch.value.start, to: prefetch.value.target)
+        }
+
+        store.context.reset()
         let snapshot = try measure {
             try GraphAlgorithms.makeSnapshot(context: store.context)
         }
-
-        let managedBFS = measure {
-            GraphAlgorithms.breadthFirstManaged(from: start)
-        }
-
+        let snapshotEndpoints = try endpoints(in: store, startLabel: startLabel, targetLabel: targetLabel)
         let snapshotBFS = measure {
-            GraphAlgorithms.breadthFirstSnapshot(from: start.id, in: snapshot.value)
+            GraphAlgorithms.breadthFirstSnapshot(from: snapshotEndpoints.start.id, in: snapshot.value)
         }
-
-        let managedDijkstra = measure {
-            GraphAlgorithms.dijkstraManaged(from: start, to: target)
-        }
-
         let snapshotDijkstra = measure {
-            GraphAlgorithms.dijkstraSnapshot(from: start.id, to: target.id, in: snapshot.value)
+            GraphAlgorithms.dijkstraSnapshot(from: snapshotEndpoints.start.id, to: snapshotEndpoints.target.id, in: snapshot.value)
         }
 
         let pathWeight = snapshotDijkstra.value?.totalWeight ?? .nan
 
         precondition(managedBFS.value.count == seed.value.nodeCount)
+        precondition(prefetchedBFS.value.count == seed.value.nodeCount)
         precondition(snapshotBFS.value.count == seed.value.nodeCount)
         precondition(managedDijkstra.value != nil)
+        precondition(prefetchedDijkstra.value != nil)
         precondition(snapshotDijkstra.value != nil)
         precondition(managedDijkstra.value?.totalWeight == snapshotDijkstra.value?.totalWeight)
+        precondition(prefetchedDijkstra.value?.totalWeight == snapshotDijkstra.value?.totalWeight)
 
         results.append(BenchmarkResult(
             store: storeKind,
@@ -244,9 +291,12 @@ for storeKind in stores {
             edgeCount: seed.value.edgeCount,
             seedMilliseconds: seed.milliseconds,
             snapshotMilliseconds: snapshot.milliseconds,
+            prefetchMilliseconds: prefetch.milliseconds,
             managedBFSMilliseconds: managedBFS.milliseconds,
+            prefetchedBFSMilliseconds: prefetchedBFS.milliseconds,
             snapshotBFSMilliseconds: snapshotBFS.milliseconds,
             managedDijkstraMilliseconds: managedDijkstra.milliseconds,
+            prefetchedDijkstraMilliseconds: prefetchedDijkstra.milliseconds,
             snapshotDijkstraMilliseconds: snapshotDijkstra.milliseconds,
             pathWeight: pathWeight
         ))
@@ -256,7 +306,8 @@ for storeKind in stores {
 print("CoreDataGraphDB benchmark")
 print("Stores: \(stores.map(\.rawValue).joined(separator: ", "))")
 print("Graph: directed weighted grid, right/down edges")
-print("Context reset after seeding: yes")
+print("Context reset before each strategy: yes")
+print("Prefetch: outgoingEdges + outgoingEdges.target")
 print("Format: \(outputFormat.rawValue)")
 print("")
 

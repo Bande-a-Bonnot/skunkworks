@@ -14,20 +14,23 @@ Explore whether Core Data can serve as a useful app-local graph database substra
 
 ## Current State
 
-First runnable spike is complete.
+First runnable spike and benchmark follow-ups are complete.
 
 Implemented:
 
 - Swift package at `experiments/core-data-graph-db/`.
 - Programmatic Core Data model.
 - `GraphNode` and first-class weighted directed `GraphEdge` entities.
-- In-memory `GraphStore` with fixture and grid seeding.
-- BFS over live managed-object relationships.
-- BFS over value-type adjacency snapshots.
-- Dijkstra over live managed-object relationships.
-- Dijkstra over value-type adjacency snapshots.
-- Unit tests for model creation, BFS, Dijkstra, unreachable targets, and grid seeding.
-- Benchmark executable comparing managed traversal with snapshot traversal across in-memory and SQLite-backed stores. Default output is a readable Markdown-style table; `--format csv` is available for machine-readable output.
+- In-memory and SQLite-backed `GraphStore` support.
+- Fixture and grid graph seeding.
+- BFS and Dijkstra over live managed-object relationships.
+- BFS and Dijkstra over value-type adjacency snapshots.
+- Benchmark comparisons for:
+  - no-prefetch managed traversal;
+  - relationship-prefetched managed traversal;
+  - snapshot traversal.
+- Unit tests for model creation, BFS, Dijkstra, unreachable targets, grid seeding, and SQLite refetch.
+- Readable benchmark table output by default; `--format csv` for machine-readable output.
 
 Key files:
 
@@ -36,19 +39,23 @@ Key files:
 - `Sources/CoreDataGraphDBBenchmark/main.swift`
 - `Tests/CoreDataGraphDBTests/`
 - `docs/plans/2026-05-21-core-data-graph-db-first-spike-plan.md`
+- `docs/plans/2026-05-22-sqlite-store-benchmark-plan.md`
+- `docs/plans/2026-05-22-prefetch-benchmark-plan.md`
 - `docs/solutions/2026-05-21-first-spike-benchmark-findings.md`
 - `docs/solutions/2026-05-22-sqlite-vs-in-memory-benchmark-findings.md`
+- `docs/solutions/2026-05-22-relationship-prefetch-benchmark-findings.md`
 
 ## Working Direction
 
-Current hypothesis after the first benchmark:
+Current hypothesis:
 
 ```text
 Core Data is useful as a persistent object graph / identity / relationship-integrity substrate.
+Relationship prefetching makes managed traversal viable.
 Algorithmic hot paths should probably run over value snapshots.
 ```
 
-Snapshot traversal is cleaner and faster in the release benchmarks. Managed-object traversal is still pleasant and adequate for small graphs. SQLite primarily changes write/seed cost and fault-backed relationship traversal; snapshot algorithm runtime is mostly store-agnostic after the snapshot exists.
+SQLite fault-backed traversal is expensive without prefetch. Prefetching `outgoingEdges` and `outgoingEdges.target` dramatically improves managed traversal on SQLite, but snapshot traversal remains the fastest and simplest algorithm execution path.
 
 ## Local Todos
 
@@ -57,10 +64,13 @@ Done:
 - `001` — `todos/001-done-p1-write-first-spike-plan.md`
 - `002` — `todos/002-done-p1-build-core-data-graph-harness.md`
 - `003` — `todos/003-done-p1-implement-bfs-and-dijkstra.md`
+- `004` — `todos/004-done-p2-compare-sqlite-backed-store.md`
+- `005` — `todos/005-done-p2-prefetch-relationship-traversal-benchmark.md`
 
 Pending:
 
-- `005` — `todos/005-pending-p2-prefetch-relationship-traversal-benchmark.md`
+- `006` — `todos/006-pending-p2-add-repeated-benchmark-runs.md`
+- `007` — `todos/007-pending-p2-add-random-graph-fixtures.md`
 
 ## Verification
 
@@ -69,7 +79,6 @@ Last verified on 2026-05-22:
 ```bash
 cd experiments/core-data-graph-db
 swift test
-swift run CoreDataGraphDBBenchmark --store both
 swift run -c release CoreDataGraphDBBenchmark --store both
 swift run -c release CoreDataGraphDBBenchmark --store both --format csv
 ```
@@ -78,21 +87,22 @@ All passed.
 
 Release benchmark snapshot:
 
-| Store     | Case   | Nodes | Edges | Seed ms | Snapshot ms | BFS managed ms | BFS snapshot ms | Dijkstra managed ms | Dijkstra snapshot ms | Path weight |
-| --------- | ------ | ----: | ----: | ------: | ----------: | -------------: | --------------: | ------------------: | -------------------: | ----------: |
-| in-memory | small  |   100 |   180 |   1.713 |       0.418 |          0.171 |           0.020 |               0.254 |                0.110 |      59.000 |
-| in-memory | medium |   625 |  1200 |   9.249 |       2.304 |          0.960 |           0.119 |               2.058 |                1.193 |     168.000 |
-| in-memory | large  |  2500 |  4900 |  33.294 |       9.595 |          3.783 |           0.650 |              13.153 |                8.472 |     343.000 |
-| sqlite    | small  |   100 |   180 |  43.671 |       0.331 |          0.536 |           0.021 |               0.232 |                0.107 |      59.000 |
-| sqlite    | medium |   625 |  1200 |  34.420 |       1.633 |          2.949 |           0.122 |               1.994 |                1.150 |     168.000 |
-| sqlite    | large  |  2500 |  4900 |  68.089 |       5.371 |         12.761 |           0.498 |              12.383 |                8.952 |     343.000 |
+| Store     | Case   | Nodes | Edges | Seed ms | Snapshot build ms | Prefetch ms | BFS managed ms | BFS prefetched ms | BFS snapshot ms | Dijkstra managed ms | Dijkstra prefetched ms | Dijkstra snapshot ms | Path weight |
+| --------- | ------ | ----: | ----: | ------: | ----------------: | ----------: | -------------: | ----------------: | --------------: | ------------------: | ---------------------: | -------------------: | ----------: |
+| in-memory | small  |   100 |   180 |   1.733 |             0.404 |       0.461 |          0.478 |             0.389 |           0.021 |               0.602 |                  0.237 |                0.108 |      59.000 |
+| in-memory | medium |   625 |  1200 |   9.053 |             2.381 |       2.739 |          2.926 |             2.475 |           0.123 |               3.973 |                  2.102 |                1.267 |     168.000 |
+| in-memory | large  |  2500 |  4900 |  35.132 |             9.442 |      10.839 |         11.113 |            10.412 |           0.519 |              20.488 |                 12.603 |                9.076 |     343.000 |
+| sqlite    | small  |   100 |   180 | 125.990 |             0.418 |       0.819 |          2.265 |             0.191 |           0.025 |               2.132 |                  0.235 |                0.118 |      59.000 |
+| sqlite    | medium |   625 |  1200 |  49.759 |             1.897 |       3.161 |         12.315 |             1.072 |           0.118 |              15.659 |                  1.821 |                1.175 |     168.000 |
+| sqlite    | large  |  2500 |  4900 |  78.737 |             7.205 |      11.120 |         52.327 |             5.007 |           0.514 |              61.347 |                 13.027 |                9.230 |     343.000 |
 
 ## Open Questions
 
-- Does relationship prefetching materially improve managed traversal?
 - What graph sizes make snapshot build cost meaningful?
+- How do denser/random graph shapes change the managed/prefetched/snapshot tradeoff?
 - Should the next algorithm be connected components, cycle detection, topological sort, or A*?
+- Should benchmarks report repeated-run median/p95 before drawing stronger conclusions?
 
 ## Next Action
 
-Run the relationship-prefetch benchmark follow-up (`todo 005`).
+Recommended next step: switch to `core-data-rest-layer` and write its first spike plan. If continuing this experiment first, do either repeated benchmark runs (`todo 006`) or random graph fixtures (`todo 007`).

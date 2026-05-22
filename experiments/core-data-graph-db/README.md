@@ -105,6 +105,7 @@ The package uses a programmatic Core Data model and an in-memory store for the f
 - Early benchmark read: Core Data is comfortable for identity/persistence/relationship integrity; snapshots are cleaner and faster for algorithmic hot paths.
 - Detailed first-spike findings: `docs/solutions/2026-05-21-first-spike-benchmark-findings.md`.
 - SQLite vs in-memory findings: `docs/solutions/2026-05-22-sqlite-vs-in-memory-benchmark-findings.md`.
+- Relationship prefetch findings: `docs/solutions/2026-05-22-relationship-prefetch-benchmark-findings.md`.
 
 ## Next Ideas
 
@@ -116,7 +117,9 @@ The package uses a programmatic Core Data model and an in-memory store for the f
 - [x] Implement Dijkstra.
 - [x] Benchmark or at least instrument fault/fetch behavior.
 - [x] Compare in-memory and SQLite-backed stores.
-- [ ] Add relationship prefetch experiments.
+- [x] Add relationship prefetch experiments.
+- [ ] Add repeated benchmark runs with median/p95 output.
+- [ ] Add denser random graph fixtures.
 
 ## Cleanup / Graduation
 
