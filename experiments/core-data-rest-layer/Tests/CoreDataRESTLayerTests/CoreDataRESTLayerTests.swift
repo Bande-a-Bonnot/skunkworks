@@ -23,6 +23,45 @@ final class CoreDataRESTLayerTests: XCTestCase {
         XCTAssertEqual(server.requestCount(forPath: "/projects/\(fixture.project.id.uuidString)/tasks"), 1)
     }
 
+    func testRESTIncrementalStoreRelationshipFaultCanTraverseCursorPages() throws {
+        let fixture = Fixture.make(taskCount: 5)
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL, taskPagination: .cursor(limit: 2))
+        let project = try XCTUnwrap(stack.context.fetch(CDProject.fetchRequestSortedByName()).first)
+
+        XCTAssertEqual(project.tasks.count, 5)
+        XCTAssertEqual(server.requestCount(forPath: "/projects/\(fixture.project.id.uuidString)/tasks"), 3)
+    }
+
+    func testRESTIncrementalStoreRelationshipFaultCanTraverseOffsetPages() throws {
+        let fixture = Fixture.make(taskCount: 5)
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL, taskPagination: .offset(limit: 2))
+        let project = try XCTUnwrap(stack.context.fetch(CDProject.fetchRequestSortedByName()).first)
+
+        XCTAssertEqual(project.tasks.count, 5)
+        XCTAssertEqual(server.requestCount(forPath: "/projects/\(fixture.project.id.uuidString)/tasks"), 3)
+    }
+
+    func testRESTIncrementalStoreRelationshipFaultCanTraverseNumberedPages() throws {
+        let fixture = Fixture.make(taskCount: 5)
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL, taskPagination: .numberedPages(perPage: 2))
+        let project = try XCTUnwrap(stack.context.fetch(CDProject.fetchRequestSortedByName()).first)
+
+        XCTAssertEqual(project.tasks.count, 5)
+        XCTAssertEqual(server.requestCount(forPath: "/projects/\(fixture.project.id.uuidString)/tasks"), 3)
+    }
+
     func testRESTIncrementalStoreSavePatchesTaskThroughHTTP() throws {
         let fixture = Fixture.make()
         let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
@@ -44,6 +83,37 @@ final class CoreDataRESTLayerTests: XCTestCase {
         XCTAssertEqual(remoteTask.version, 2)
         XCTAssertEqual(task.version, 2)
         XCTAssertEqual(server.requestCount(forPath: "/tasks/\(fixture.firstTaskID.uuidString)"), 1)
+    }
+
+    func testRESTIncrementalStoreSaveConflictMarksObjectAndThrows() throws {
+        let fixture = Fixture.make()
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL)
+        let project = try XCTUnwrap(stack.context.fetch(CDProject.fetchRequestSortedByName()).first)
+        let task = try XCTUnwrap(project.tasks.first { $0.id == fixture.firstTaskID })
+
+        try server.mutateTask(id: fixture.firstTaskID) { task in
+            task.title = "Remote won first"
+            task.status = "blocked"
+            task.version = 2
+            task.updatedAt = Fixture.laterDate
+        }
+
+        task.title = "Local stale edit through Core Data save"
+        task.status = "done"
+
+        XCTAssertThrowsError(try stack.context.save()) { error in
+            guard case RESTIncrementalStoreError.conflict(let remote) = error else {
+                return XCTFail("Expected RESTIncrementalStoreError.conflict, got \(error)")
+            }
+            XCTAssertEqual(remote.version, 2)
+        }
+        XCTAssertTrue(task.isDirty)
+        XCTAssertEqual(task.conflictState, "remoteVersion=2")
+        XCTAssertTrue(task.lastSyncError?.contains("Remote won first") == true)
     }
 
     func testSyncEditAndPushRoundTripThroughHTTP() async throws {

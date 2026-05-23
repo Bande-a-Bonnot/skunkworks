@@ -39,15 +39,15 @@ Current docs:
 
 ## Working Direction
 
-Do not start with a generic REST ORM or custom persistent store.
-
-The first spike should use a real local HTTP boundary:
+The target architecture is the custom persistent store path, not a conventional projection/sync layer:
 
 ```text
-embedded local REST server -> URLSession client -> Core Data projection -> app-style fetch/edit/sync
+NSFetchRequest / relationship fault / context.save()
+        -> RESTIncrementalStore
+        -> embedded local REST server
 ```
 
-The embedded server should bind to `127.0.0.1:0` in tests and provide deterministic REST behavior for projects/tasks, including a stale-write conflict path.
+Keep the embedded server bound to `127.0.0.1:0` in tests. Preserve the earlier projection code only as historical context; new work should harden `RESTIncrementalStore`.
 
 ## Local Todos
 
@@ -57,10 +57,11 @@ Done:
 - `002` — `todos/002-done-p1-build-embedded-server-projection.md`
 - `003` — `todos/003-done-p3-evaluate-custom-persistent-store.md`
 - `004` — `todos/004-done-p2-add-pagination-and-latency-cases.md`
+- `005` — `todos/005-done-p1-harden-rest-incremental-store.md`
 
-Pending:
+Ready:
 
-- `005` — `todos/005-ready-p1-harden-rest-incremental-store.md`
+- `006` — `todos/006-ready-p1-rest-store-ergonomics-and-errors.md`
 
 ## Open Questions
 
@@ -77,8 +78,8 @@ Still open:
 
 - Should loading/error/conflict/completeness state stay on managed objects, move to separate sync records, or live in caller state as scenarios grow?
 - Should local edits remain dirty flags on managed objects, or become separate pending-change entities / child-context units of work?
-- How should the custom store map HTTP conflicts/errors into Core Data errors or managed-object state?
-- How should relationship pagination work when relationship faulting itself calls REST?
+- How should non-conflict HTTP/network errors be wrapped for Core Data callers?
+- Can relationship pagination/completeness metadata be represented without falling back to projection sync?
 
 ## Verification
 
@@ -89,8 +90,8 @@ cd experiments/core-data-rest-layer
 swift test
 ```
 
-Last verified 2026-05-23: 9 XCTest tests passed.
+Last verified 2026-05-23: 13 XCTest tests passed.
 
 ## Next Action
 
-Pick up `todos/005-ready-p1-harden-rest-incremental-store.md`: conflict/error handling and pagination in the `NSIncrementalStore` path.
+Pick up `todos/006-ready-p1-rest-store-ergonomics-and-errors.md`: non-conflict error policy, execution policy, and pagination/completeness metadata for the `NSIncrementalStore` path.

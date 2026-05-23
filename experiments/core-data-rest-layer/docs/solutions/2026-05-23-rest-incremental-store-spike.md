@@ -34,14 +34,19 @@ The custom store must provide a non-nil store URL, even though this REST store d
 
 `NSStoreTypeKey` metadata must match the registered store type. The working registered type is `RESTIncrementalStore`.
 
+## Hardened behavior added
+
+- `context.save()` stale-write conflicts now decode the server's `409` response, mark the `CDTask` with `isDirty`, `lastSyncError`, and `conflictState`, then throw `RESTIncrementalStoreError.conflict(remote:)`.
+- Relationship faulting can now traverse cursor, offset, or numbered-page task endpoints by configuring `RESTCoreDataStack(baseURL:taskPagination:)`.
+- Fetches, relationship faults, and saves surface HTTP/network problems as thrown store errors. This is the current explicit policy: Core Data operations do not hide REST failures in silent object state, except that save conflicts also annotate the attempted object for inspection.
+
 ## Current limitations
 
-- Conflict handling for `context.save()` is not mapped cleanly yet.
 - Inserts/deletes are not supported.
-- Relationship pagination currently exists in the server/client, but not in the incremental-store relationship fault path.
-- HTTP errors currently surface as thrown store errors; this needs a deliberate app-facing policy.
+- Pagination metadata is not persisted as Core Data state; relationship faulting eagerly walks all pages for the configured strategy.
+- HTTP errors thrown from relationship faulting are synchronous Core Data errors, which is honest but awkward for UI ergonomics.
 - The old projection sync path still exists in code as prior work, but it is not the target architecture.
 
 ## Next step
 
-Do `todos/005-ready-p1-harden-rest-incremental-store.md`.
+Explore whether this can be made app-ergonomic: background-context execution policy, typed error recovery, and persistent pagination/completeness metadata in the custom-store path.

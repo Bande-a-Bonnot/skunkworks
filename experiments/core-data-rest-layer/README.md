@@ -115,6 +115,8 @@ The test harness starts an embedded REST server on `127.0.0.1:0`. The current me
 - Prefer an embedded local server over static fixtures so tests exercise real HTTP semantics.
 - Important correction: a materialized Core Data projection is the wrong target for this experiment. It is ordinary sync/cache architecture, not Core Data over REST.
 - `NSIncrementalStore` is the relevant path: `NSFetchRequest` can call `GET /projects`; relationship faulting can call `GET /projects/{id}/tasks`; `context.save()` can call `PATCH /tasks/{id}`.
+- Relationship faulting can walk cursor, offset, or numbered-page REST endpoints, but it currently does so eagerly and synchronously.
+- Save conflicts can mark the dirty object and throw `RESTIncrementalStoreError.conflict(remote:)`.
 - Core Data's store API is synchronous, so REST calls inside an incremental store are blocking unless wrapped by a higher-level execution policy.
 - Pagination style is part of the remote contract and leaks into sync/completeness semantics; it should not be hidden as a transparent relationship fault.
 - Keep API version, local Core Data model version, and per-resource optimistic concurrency version separate.

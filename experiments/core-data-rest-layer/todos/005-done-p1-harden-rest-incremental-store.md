@@ -1,5 +1,5 @@
 ---
-status: ready
+status: done
 priority: p1
 issue_id: "005"
 tags: [core-data, custom-store, rest]
@@ -9,6 +9,8 @@ dependencies: ["003"]
 # Harden REST Incremental Store
 
 Continue the real Core Data-over-REST path: `NSIncrementalStore` as the REST-backed persistent store.
+
+Done: save conflicts now annotate/throw, relationship faulting supports cursor/offset/numbered pagination, and error policy is documented.
 
 ## Acceptance Criteria
 

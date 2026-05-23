@@ -9,6 +9,7 @@ public enum RESTIncrementalStoreError: Error, CustomStringConvertible {
     case unsupportedRelationship(String)
     case invalidResponse
     case httpStatus(Int, String)
+    case conflict(remote: RemoteTask)
 
     public var description: String {
         switch self {
@@ -26,6 +27,8 @@ public enum RESTIncrementalStoreError: Error, CustomStringConvertible {
             return "Invalid HTTP response"
         case let .httpStatus(status, body):
             return "HTTP \(status): \(body)"
+        case let .conflict(remote):
+            return "Conflict with remote task \(remote.id) at version \(remote.version)"
         }
     }
 }
@@ -34,7 +37,7 @@ public final class RESTCoreDataStack {
     public let coordinator: NSPersistentStoreCoordinator
     public let context: NSManagedObjectContext
 
-    public init(baseURL: URL) throws {
+    public init(baseURL: URL, taskPagination: TaskPaginationStrategy = .none) throws {
         RESTIncrementalStore.registerStoreClass()
 
         coordinator = NSPersistentStoreCoordinator(managedObjectModel: CoreDataStack.makeModel())
@@ -43,7 +46,7 @@ public final class RESTCoreDataStack {
             configurationName: nil,
             at: URL(fileURLWithPath: NSTemporaryDirectory())
                 .appendingPathComponent("CoreDataRESTLayer-\(UUID().uuidString).rest"),
-            options: [RESTIncrementalStore.baseURLOptionKey: baseURL.absoluteString]
+            options: RESTIncrementalStore.options(baseURL: baseURL, taskPagination: taskPagination)
         )
 
         context = NSManagedObjectContext(concurrencyType: .mainQueueConcurrencyType)
@@ -55,8 +58,11 @@ public final class RESTCoreDataStack {
 public final class RESTIncrementalStore: NSIncrementalStore {
     public static let storeType = "RESTIncrementalStore"
     public static let baseURLOptionKey = "CoreDataRESTLayer.RESTIncrementalStore.baseURL"
+    public static let taskPaginationModeOptionKey = "CoreDataRESTLayer.RESTIncrementalStore.taskPaginationMode"
+    public static let taskPaginationLimitOptionKey = "CoreDataRESTLayer.RESTIncrementalStore.taskPaginationLimit"
 
     private var client: BlockingRESTClient?
+    private var taskPagination: TaskPaginationStrategy = .none
     private let lock = NSLock()
     private var projectCache: [UUID: RemoteProject] = [:]
     private var taskCache: [UUID: RemoteTask] = [:]
@@ -66,6 +72,24 @@ public final class RESTIncrementalStore: NSIncrementalStore {
         NSPersistentStoreCoordinator.registerStoreClass(Self.self, forStoreType: storeType)
     }
 
+    public static func options(baseURL: URL, taskPagination: TaskPaginationStrategy = .none) -> [AnyHashable: Any] {
+        var options: [AnyHashable: Any] = [baseURLOptionKey: baseURL.absoluteString]
+        switch taskPagination {
+        case .none:
+            options[taskPaginationModeOptionKey] = "none"
+        case let .cursor(limit):
+            options[taskPaginationModeOptionKey] = "cursor"
+            options[taskPaginationLimitOptionKey] = limit
+        case let .offset(limit):
+            options[taskPaginationModeOptionKey] = "offset"
+            options[taskPaginationLimitOptionKey] = limit
+        case let .numberedPages(perPage):
+            options[taskPaginationModeOptionKey] = "numberedPages"
+            options[taskPaginationLimitOptionKey] = perPage
+        }
+        return options
+    }
+
     public override func loadMetadata() throws {
         guard let baseURLString = options?[Self.baseURLOptionKey] as? String,
               let baseURL = URL(string: baseURLString) else {
@@ -73,6 +97,7 @@ public final class RESTIncrementalStore: NSIncrementalStore {
         }
 
         client = BlockingRESTClient(baseURL: baseURL)
+        taskPagination = Self.paginationStrategy(from: options)
         metadata = [
             NSStoreTypeKey: Self.storeType,
             NSStoreUUIDKey: UUID().uuidString,
@@ -164,7 +189,7 @@ public final class RESTIncrementalStore: NSIncrementalStore {
         switch (objectID.entity.name, relationship.name) {
         case ("CDProject", "tasks"):
             let projectID = try uuidReference(from: objectID)
-            let tasks = try fetchRemoteTasks(projectID: projectID)
+            let tasks = try fetchRemoteTasks(projectID: projectID, pagination: taskPagination)
             let ids = tasks.map { task in
                 self.newObjectID(for: entity(named: "CDTask"), referenceObject: task.id.uuidString)
             }
@@ -192,12 +217,23 @@ public final class RESTIncrementalStore: NSIncrementalStore {
             guard let id = object.value(forKey: "id") as? UUID else {
                 throw RESTIncrementalStoreError.invalidReferenceObject(object)
             }
-            let remote = try requireClient().patchTask(
-                id: id,
-                title: object.value(forKey: "title") as? String ?? "",
-                status: object.value(forKey: "status") as? String ?? "",
-                version: Int(object.value(forKey: "version") as? Int64 ?? 0)
-            )
+            let remote: RemoteTask
+            do {
+                remote = try requireClient().patchTask(
+                    id: id,
+                    title: object.value(forKey: "title") as? String ?? "",
+                    status: object.value(forKey: "status") as? String ?? "",
+                    version: Int(object.value(forKey: "version") as? Int64 ?? 0)
+                )
+            } catch RESTIncrementalStoreError.conflict(let remote) {
+                object.setValue(true, forKey: "isDirty")
+                object.setValue(
+                    "Conflict: remote version \(remote.version) has title '\(remote.title)' and status '\(remote.status)'",
+                    forKey: "lastSyncError"
+                )
+                object.setValue("remoteVersion=\(remote.version)", forKey: "conflictState")
+                throw RESTIncrementalStoreError.conflict(remote: remote)
+            }
             lock.withLock {
                 taskCache[remote.id] = remote
             }
@@ -219,8 +255,8 @@ public final class RESTIncrementalStore: NSIncrementalStore {
         return projects
     }
 
-    private func fetchRemoteTasks(projectID: UUID) throws -> [RemoteTask] {
-        let tasks = try requireClient().fetchTasks(projectID: projectID)
+    private func fetchRemoteTasks(projectID: UUID, pagination: TaskPaginationStrategy = .none) throws -> [RemoteTask] {
+        let tasks = try requireClient().fetchTasks(projectID: projectID, pagination: pagination)
         lock.withLock {
             taskIDsByProjectID[projectID] = tasks.map(\.id)
             for task in tasks {
@@ -232,7 +268,7 @@ public final class RESTIncrementalStore: NSIncrementalStore {
 
     private func fetchRemoteTasksForAllProjects() throws -> [RemoteTask] {
         try fetchRemoteProjects().flatMap { project in
-            try fetchRemoteTasks(projectID: project.id)
+            try fetchRemoteTasks(projectID: project.id, pagination: taskPagination)
         }
     }
 
@@ -275,6 +311,21 @@ public final class RESTIncrementalStore: NSIncrementalStore {
         }
         return client
     }
+
+    private static func paginationStrategy(from options: [AnyHashable: Any]?) -> TaskPaginationStrategy {
+        let mode = options?[taskPaginationModeOptionKey] as? String ?? "none"
+        let limit = options?[taskPaginationLimitOptionKey] as? Int ?? 0
+        switch mode {
+        case "cursor" where limit > 0:
+            return .cursor(limit: limit)
+        case "offset" where limit > 0:
+            return .offset(limit: limit)
+        case "numberedPages" where limit > 0:
+            return .numberedPages(perPage: limit)
+        default:
+            return .none
+        }
+    }
 }
 
 private final class BlockingRESTClient {
@@ -289,8 +340,83 @@ private final class BlockingRESTClient {
         try send(path: "/projects", responseType: [RemoteProject].self)
     }
 
-    func fetchTasks(projectID: UUID) throws -> [RemoteTask] {
-        try send(path: "/projects/\(projectID.uuidString)/tasks", responseType: [RemoteTask].self)
+    func fetchTasks(projectID: UUID, pagination: TaskPaginationStrategy = .none) throws -> [RemoteTask] {
+        switch pagination {
+        case .none:
+            return try send(path: "/projects/\(projectID.uuidString)/tasks", responseType: [RemoteTask].self)
+        case let .cursor(limit):
+            var allTasks: [RemoteTask] = []
+            var cursor: String?
+            repeat {
+                let page = try fetchTaskCursorPage(projectID: projectID, limit: limit, cursor: cursor)
+                allTasks.append(contentsOf: page.items)
+                cursor = page.nextCursor
+            } while cursor != nil
+            return allTasks
+        case let .offset(limit):
+            var allTasks: [RemoteTask] = []
+            var offset = 0
+            while true {
+                let page = try fetchTaskOffsetPage(projectID: projectID, limit: limit, offset: offset)
+                allTasks.append(contentsOf: page)
+                guard page.count == limit else { break }
+                offset += page.count
+            }
+            return allTasks
+        case let .numberedPages(perPage):
+            var allTasks: [RemoteTask] = []
+            var pageIndex = 1
+            while true {
+                let page = try fetchTaskNumberedPage(projectID: projectID, page: pageIndex, perPage: perPage)
+                allTasks.append(contentsOf: page.items)
+                if let totalPages = page.totalPages {
+                    guard page.page < totalPages else { break }
+                } else {
+                    guard page.items.count == perPage else { break }
+                }
+                pageIndex += 1
+            }
+            return allTasks
+        }
+    }
+
+    func fetchTaskCursorPage(projectID: UUID, limit: Int, cursor: String?) throws -> CursorPage<RemoteTask> {
+        var components = URLComponents()
+        components.path = "/projects/\(projectID.uuidString)/tasks"
+        components.queryItems = [URLQueryItem(name: "limit", value: String(limit))]
+        if let cursor {
+            components.queryItems?.append(URLQueryItem(name: "cursor", value: cursor))
+        }
+        guard let path = components.string else {
+            throw RESTIncrementalStoreError.invalidResponse
+        }
+        return try send(path: path, responseType: CursorPage<RemoteTask>.self)
+    }
+
+    func fetchTaskOffsetPage(projectID: UUID, limit: Int, offset: Int) throws -> [RemoteTask] {
+        var components = URLComponents()
+        components.path = "/projects/\(projectID.uuidString)/tasks"
+        components.queryItems = [
+            URLQueryItem(name: "limit", value: String(limit)),
+            URLQueryItem(name: "offset", value: String(offset))
+        ]
+        guard let path = components.string else {
+            throw RESTIncrementalStoreError.invalidResponse
+        }
+        return try send(path: path, responseType: [RemoteTask].self)
+    }
+
+    func fetchTaskNumberedPage(projectID: UUID, page: Int, perPage: Int) throws -> NumberedPage<RemoteTask> {
+        var components = URLComponents()
+        components.path = "/projects/\(projectID.uuidString)/tasks"
+        components.queryItems = [
+            URLQueryItem(name: "page", value: String(page)),
+            URLQueryItem(name: "perPage", value: String(perPage))
+        ]
+        guard let path = components.string else {
+            throw RESTIncrementalStoreError.invalidResponse
+        }
+        return try send(path: path, responseType: NumberedPage<RemoteTask>.self)
     }
 
     func patchTask(id: UUID, title: String, status: String, version: Int) throws -> RemoteTask {
@@ -343,12 +469,24 @@ private final class BlockingRESTClient {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw RESTIncrementalStoreError.invalidResponse
         }
-        guard (200..<300).contains(httpResponse.statusCode) else {
+        switch httpResponse.statusCode {
+        case 200..<300:
+            return try decoder.decode(Response.self, from: data)
+        case 409:
+            if let conflict = try? decoder.decode(StoreConflictResponse.self, from: data) {
+                throw RESTIncrementalStoreError.conflict(remote: conflict.current)
+            }
+            fallthrough
+        default:
             let body = String(data: data, encoding: .utf8) ?? ""
             throw RESTIncrementalStoreError.httpStatus(httpResponse.statusCode, body)
         }
-        return try decoder.decode(Response.self, from: data)
     }
+}
+
+private struct StoreConflictResponse: Decodable {
+    var error: String
+    var current: RemoteTask
 }
 
 private extension NSLock {
