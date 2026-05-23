@@ -78,7 +78,7 @@ Root todos track repo-level or cross-experiment work only. Experiment-specific w
 
 ## Likely Next Actions
 
-1. Continue `core-data-rest-layer` by planning sync/completeness metadata, then reassess custom-store follow-up (`003`).
+1. Continue `core-data-rest-layer` with local todo `005`: harden the real `NSIncrementalStore` REST path (conflicts/errors/pagination).
 2. Keep root handoff minimal; update experiment-local handoff with implementation details.
 3. Decide later whether `experiments/README.md` should stay a manual catalog, become generated, or both.
 

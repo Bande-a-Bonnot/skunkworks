@@ -28,6 +28,8 @@ public final class EmbeddedRESTServer {
     private var tasks: [UUID: RemoteTask]
     private var endpointLatencies: [String: TimeInterval] = [:]
     private var lastRequestHeaders: [String: String] = [:]
+    private var lastRequestPath: String?
+    private var requestCountsByPath: [String: Int] = [:]
     private let encoder = JSONCoding.makeEncoder()
     private let decoder = JSONCoding.makeDecoder()
 
@@ -119,6 +121,14 @@ public final class EmbeddedRESTServer {
         }
     }
 
+    public func lastPath() -> String? {
+        stateQueue.sync { lastRequestPath }
+    }
+
+    public func requestCount(forPath path: String) -> Int {
+        stateQueue.sync { requestCountsByPath[path, default: 0] }
+    }
+
     private func handle(connection: NWConnection) {
         connection.start(queue: queue)
         receive(on: connection, buffer: Data())
@@ -150,6 +160,8 @@ public final class EmbeddedRESTServer {
     private func respond(to request: HTTPRequest, on connection: NWConnection) {
         let latency = stateQueue.sync {
             lastRequestHeaders = request.headers
+            lastRequestPath = request.path
+            requestCountsByPath[request.path, default: 0] += 1
             return endpointLatencies
                 .filter { request.path.hasPrefix($0.key) }
                 .sorted { $0.key.count > $1.key.count }

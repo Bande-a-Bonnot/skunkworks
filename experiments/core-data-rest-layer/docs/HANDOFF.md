@@ -14,7 +14,7 @@ Explore whether Core Data is useful as an object graph, identity map, validation
 
 ## Current State
 
-First runnable Swift spike exists and passes tests.
+A real custom-store spike exists and passes tests. The earlier projection-sync spike remains in code, but it is not the target architecture for this experiment.
 
 Implemented package:
 
@@ -23,9 +23,10 @@ Implemented package:
 - `Sources/CoreDataRESTLayer/RESTClient.swift` — `URLSession` client for `GET /projects`, paginated `GET /projects/{projectID}/tasks`, and `PATCH /tasks/{taskID}`.
 - `Sources/CoreDataRESTLayer/VersionMapping.swift` — explicit API version / local model version compatibility skeleton.
 - `Sources/CoreDataRESTLayer/CoreDataStack.swift` — programmatic Core Data model with `CDProject` / `CDTask`, relationship, version, dirty, and conflict metadata.
-- `Sources/CoreDataRESTLayer/ProjectionSync.swift` — pull projection and dirty-task push/conflict recording; task pulls can use cursor, offset, or numbered-page pagination.
+- `Sources/CoreDataRESTLayer/RESTIncrementalStore.swift` — `NSIncrementalStore` that maps Core Data fetches, relationship faults, and task saves to REST calls.
+- `Sources/CoreDataRESTLayer/ProjectionSync.swift` — earlier pull projection path; keep as historical/baseline code, not the target architecture.
 - `Sources/CoreDataRESTLayerTestServer/EmbeddedRESTServer.swift` — dependency-free `Network.framework` local HTTP server bound to `127.0.0.1:0`, with pagination and latency hooks.
-- `Tests/CoreDataRESTLayerTests/CoreDataRESTLayerTests.swift` — acceptance tests for sync/edit/push, stale-write conflict, pagination, latency, and version headers.
+- `Tests/CoreDataRESTLayerTests/CoreDataRESTLayerTests.swift` — acceptance tests for incremental-store fetch/fault/save plus earlier projection, pagination, latency, and version-header tests.
 
 Current docs:
 
@@ -34,6 +35,7 @@ Current docs:
 - `docs/plans/2026-05-22-core-data-rest-layer-first-spike-plan.md` defines the implemented first spike.
 - `docs/solutions/2026-05-22-first-projection-spike-findings.md` records initial findings.
 - `docs/solutions/2026-05-23-pagination-latency-versioning-findings.md` records pagination/latency/versioning findings.
+- `docs/solutions/2026-05-23-rest-incremental-store-spike.md` records the custom-store pivot and current findings.
 
 ## Working Direction
 
@@ -53,11 +55,12 @@ Done:
 
 - `001` — `todos/001-done-p1-write-first-spike-plan.md`
 - `002` — `todos/002-done-p1-build-embedded-server-projection.md`
+- `003` — `todos/003-done-p3-evaluate-custom-persistent-store.md`
 - `004` — `todos/004-done-p2-add-pagination-and-latency-cases.md`
 
 Pending:
 
-- `003` — `todos/003-pending-p3-evaluate-custom-persistent-store.md`
+- `005` — `todos/005-ready-p1-harden-rest-incremental-store.md`
 
 ## Open Questions
 
@@ -68,12 +71,14 @@ Resolved so far:
 - First conflict state location: `CDTask.isDirty`, `CDTask.lastSyncError`, and `CDTask.conflictState`.
 - Pagination styles covered: cursor, offset, and numbered pages.
 - Versioning split: API version, local model version, and per-resource optimistic concurrency version are separate concepts.
+- Custom store path is worthwhile; the projection path answered the wrong question.
 
 Still open:
 
 - Should loading/error/conflict/completeness state stay on managed objects, move to separate sync records, or live in caller state as scenarios grow?
 - Should local edits remain dirty flags on managed objects, or become separate pending-change entities / child-context units of work?
-- After pagination and latency pressure tests, does a custom persistent store still seem worth exploring?
+- How should the custom store map HTTP conflicts/errors into Core Data errors or managed-object state?
+- How should relationship pagination work when relationship faulting itself calls REST?
 
 ## Verification
 
@@ -84,8 +89,8 @@ cd experiments/core-data-rest-layer
 swift test
 ```
 
-Last verified 2026-05-23: 7 XCTest tests passed.
+Last verified 2026-05-23: 9 XCTest tests passed.
 
 ## Next Action
 
-Write a small follow-up plan for sync/completeness metadata, then decide whether `todos/003-pending-p3-evaluate-custom-persistent-store.md` is still worth a spike.
+Pick up `todos/005-ready-p1-harden-rest-incremental-store.md`: conflict/error handling and pagination in the `NSIncrementalStore` path.

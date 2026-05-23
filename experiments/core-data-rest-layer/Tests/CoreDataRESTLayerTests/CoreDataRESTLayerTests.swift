@@ -4,6 +4,48 @@ import CoreDataRESTLayerTestServer
 import XCTest
 
 final class CoreDataRESTLayerTests: XCTestCase {
+    func testRESTIncrementalStoreFetchesProjectsAndFaultsRelationshipThroughHTTP() throws {
+        let fixture = Fixture.make()
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL)
+        let projects = try stack.context.fetch(CDProject.fetchRequestSortedByName())
+
+        let project = try XCTUnwrap(projects.first)
+        XCTAssertEqual(project.name, "Skunkworks")
+        XCTAssertEqual(server.requestCount(forPath: "/projects"), 1)
+
+        let tasks = project.tasks.sorted { $0.title < $1.title }
+        XCTAssertEqual(tasks.map(\.title), ["Project into Core Data", "Wire embedded server"])
+        XCTAssertEqual(tasks.first?.project?.id, fixture.project.id)
+        XCTAssertEqual(server.requestCount(forPath: "/projects/\(fixture.project.id.uuidString)/tasks"), 1)
+    }
+
+    func testRESTIncrementalStoreSavePatchesTaskThroughHTTP() throws {
+        let fixture = Fixture.make()
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL)
+        let projects = try stack.context.fetch(CDProject.fetchRequestSortedByName())
+        let project = try XCTUnwrap(projects.first)
+        let task = try XCTUnwrap(project.tasks.first { $0.id == fixture.firstTaskID })
+
+        task.title = "Saved by Core Data store"
+        task.status = "done"
+        try stack.context.save()
+
+        let remoteTask = try server.currentTask(id: fixture.firstTaskID)
+        XCTAssertEqual(remoteTask.title, "Saved by Core Data store")
+        XCTAssertEqual(remoteTask.status, "done")
+        XCTAssertEqual(remoteTask.version, 2)
+        XCTAssertEqual(task.version, 2)
+        XCTAssertEqual(server.requestCount(forPath: "/tasks/\(fixture.firstTaskID.uuidString)"), 1)
+    }
+
     func testSyncEditAndPushRoundTripThroughHTTP() async throws {
         let fixture = Fixture.make()
         let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)

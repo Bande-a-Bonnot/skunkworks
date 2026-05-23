@@ -4,13 +4,13 @@
 
 ## Status
 
-`runnable spike`
+`custom-store spike`
 
 ## Why
 
 Core Data is often treated as "the local database thing" or "an ORM for SQLite", but its more interesting identity is an object graph management framework: identity, relationships, faults, validation, change tracking, fetch requests, merge policies, undo, and contexts.
 
-This experiment asks: what happens if the persistent backing is not local SQLite or CloudKit, but a REST API?
+This experiment asks: what happens if the persistent backing is not local SQLite or CloudKit, but a REST API? The meaningful target is a custom persistent store / incremental store, not a conventional REST-to-local-cache sync layer.
 
 ## Core Question
 
@@ -93,7 +93,7 @@ Plan: `docs/plans/2026-05-22-core-data-rest-layer-first-spike-plan.md`.
 - `docs/HANDOFF.md` — current state and exact next action.
 - `docs/initial-questions.md` — question bank.
 - `Package.swift` — Swift package harness.
-- `Sources/CoreDataRESTLayer/` — REST models/client, API/model version mapping, programmatic Core Data model, projection sync.
+- `Sources/CoreDataRESTLayer/` — REST models/client, API/model version mapping, programmatic Core Data model, projection sync, and `RESTIncrementalStore`.
 - `Sources/CoreDataRESTLayerTestServer/` — embedded deterministic HTTP server for tests.
 - `Tests/CoreDataRESTLayerTests/` — acceptance tests for sync/edit/push/conflict flows.
 - `todos/` — local task breakdown.
@@ -105,7 +105,7 @@ cd experiments/core-data-rest-layer
 swift test
 ```
 
-The test harness starts an embedded REST server on `127.0.0.1:0`, fetches through `URLSession`, projects remote resources into an in-memory Core Data store, pushes a dirty local task edit, verifies stale-write conflict handling, and exercises cursor/offset/numbered-page pagination plus endpoint latency.
+The test harness starts an embedded REST server on `127.0.0.1:0`. The current meaningful tests use `RESTIncrementalStore` so Core Data fetches, relationship faults, and `context.save()` hit REST endpoints directly. Earlier projection-sync tests still exist but are not the target architecture.
 
 ## Notes / Findings
 
@@ -113,8 +113,9 @@ The test harness starts an embedded REST server on `127.0.0.1:0`, fetches throug
 - Avoid building a full generic REST ORM. Keep the first API tiny and concrete.
 - Treat REST as remote truth with its own semantics, not as a lossy SQL endpoint.
 - Prefer an embedded local server over static fixtures so tests exercise real HTTP semantics.
-- First finding: a materialized Core Data projection makes app-style relationship/fetch access pleasant after explicit sync, but conflict/loading/error state must stay explicit in the model or surrounding sync layer.
-- First finding: Core Data dirty tracking is useful as a local unit-of-work marker, but versioned REST conflicts should not be hidden behind `save()` semantics.
+- Important correction: a materialized Core Data projection is the wrong target for this experiment. It is ordinary sync/cache architecture, not Core Data over REST.
+- `NSIncrementalStore` is the relevant path: `NSFetchRequest` can call `GET /projects`; relationship faulting can call `GET /projects/{id}/tasks`; `context.save()` can call `PATCH /tasks/{id}`.
+- Core Data's store API is synchronous, so REST calls inside an incremental store are blocking unless wrapped by a higher-level execution policy.
 - Pagination style is part of the remote contract and leaks into sync/completeness semantics; it should not be hidden as a transparent relationship fault.
 - Keep API version, local Core Data model version, and per-resource optimistic concurrency version separate.
 
