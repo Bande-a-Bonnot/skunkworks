@@ -26,6 +26,8 @@ public final class EmbeddedRESTServer {
     private var assignedPort: UInt16?
     private var projects: [UUID: RemoteProject]
     private var tasks: [UUID: RemoteTask]
+    private var endpointLatencies: [String: TimeInterval] = [:]
+    private var lastRequestHeaders: [String: String] = [:]
     private let encoder = JSONCoding.makeEncoder()
     private let decoder = JSONCoding.makeDecoder()
 
@@ -105,6 +107,18 @@ public final class EmbeddedRESTServer {
         }
     }
 
+    public func setLatency(_ latency: TimeInterval, forPathPrefix pathPrefix: String) {
+        stateQueue.sync {
+            endpointLatencies[pathPrefix] = latency
+        }
+    }
+
+    public func lastRequestHeader(_ name: String) -> String? {
+        stateQueue.sync {
+            lastRequestHeaders[name.lowercased()]
+        }
+    }
+
     private func handle(connection: NWConnection) {
         connection.start(queue: queue)
         receive(on: connection, buffer: Data())
@@ -134,6 +148,18 @@ public final class EmbeddedRESTServer {
     }
 
     private func respond(to request: HTTPRequest, on connection: NWConnection) {
+        let latency = stateQueue.sync {
+            lastRequestHeaders = request.headers
+            return endpointLatencies
+                .filter { request.path.hasPrefix($0.key) }
+                .sorted { $0.key.count > $1.key.count }
+                .first?
+                .value
+        }
+        if let latency, latency > 0 {
+            Thread.sleep(forTimeInterval: latency)
+        }
+
         do {
             let response = try route(request)
             send(response: response, on: connection)
@@ -162,6 +188,52 @@ public final class EmbeddedRESTServer {
                     .filter { $0.projectId == projectID }
                     .sorted { $0.title < $1.title }
             }
+
+            if let limitText = request.queryItems["limit"],
+               let limit = Int(limitText),
+               limit > 0,
+               let offsetText = request.queryItems["offset"],
+               let offset = Int(offsetText) {
+                let clampedStart = max(0, min(offset, payload.count))
+                let end = min(clampedStart + limit, payload.count)
+                return try .json(status: 200, body: Array(payload[clampedStart..<end]), encoder: encoder)
+            }
+
+            if let pageText = request.queryItems["page"],
+               let page = Int(pageText),
+               page > 0,
+               let perPageText = request.queryItems["perPage"],
+               let perPage = Int(perPageText),
+               perPage > 0 {
+                let start = (page - 1) * perPage
+                let clampedStart = max(0, min(start, payload.count))
+                let end = min(clampedStart + perPage, payload.count)
+                let totalPages = Int(ceil(Double(payload.count) / Double(perPage)))
+                return try .json(
+                    status: 200,
+                    body: NumberedPage(
+                        items: Array(payload[clampedStart..<end]),
+                        page: page,
+                        perPage: perPage,
+                        totalPages: totalPages
+                    ),
+                    encoder: encoder
+                )
+            }
+
+            if let limitText = request.queryItems["limit"], let limit = Int(limitText), limit > 0 {
+                let start = request.queryItems["cursor"].flatMap(Int.init) ?? 0
+                let clampedStart = max(0, min(start, payload.count))
+                let end = min(clampedStart + limit, payload.count)
+                let items = Array(payload[clampedStart..<end])
+                let nextCursor = end < payload.count ? String(end) : nil
+                return try .json(
+                    status: 200,
+                    body: CursorPage(items: items, nextCursor: nextCursor),
+                    encoder: encoder
+                )
+            }
+
             return try .json(status: 200, body: payload, encoder: encoder)
         }
 
@@ -214,6 +286,8 @@ private struct ConflictResponse: Codable {
 private struct HTTPRequest {
     var method: String
     var path: String
+    var queryItems: [String: String]
+    var headers: [String: String]
     var body: Data
 
     init?(data: Data) {
@@ -236,11 +310,15 @@ private struct HTTPRequest {
         }
 
         var contentLength = 0
+        var headers: [String: String] = [:]
         for line in lines.dropFirst() {
             let pieces = line.split(separator: ":", maxSplits: 1).map(String.init)
             guard pieces.count == 2 else { continue }
-            if pieces[0].lowercased() == "content-length" {
-                contentLength = Int(pieces[1].trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+            let name = pieces[0].lowercased()
+            let value = pieces[1].trimmingCharacters(in: .whitespacesAndNewlines)
+            headers[name] = value
+            if name == "content-length" {
+                contentLength = Int(value) ?? 0
             }
         }
 
@@ -250,7 +328,19 @@ private struct HTTPRequest {
         }
 
         method = requestParts[0]
-        path = requestParts[1].components(separatedBy: "?").first ?? requestParts[1]
+        let rawPath = requestParts[1]
+        if let components = URLComponents(string: rawPath) {
+            path = components.path
+            queryItems = Dictionary(
+                uniqueKeysWithValues: (components.queryItems ?? []).compactMap { item in
+                    item.value.map { (item.name, $0) }
+                }
+            )
+        } else {
+            path = rawPath.components(separatedBy: "?").first ?? rawPath
+            queryItems = [:]
+        }
+        self.headers = headers
         body = Data(data[bodyStart..<(bodyStart + contentLength)])
     }
 }

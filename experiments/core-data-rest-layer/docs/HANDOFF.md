@@ -20,11 +20,12 @@ Implemented package:
 
 - `Package.swift`
 - `Sources/CoreDataRESTLayer/RemoteModels.swift` — JSON domain models and shared JSON coding.
-- `Sources/CoreDataRESTLayer/RESTClient.swift` — `URLSession` client for `GET /projects`, `GET /projects/{projectID}/tasks`, and `PATCH /tasks/{taskID}`.
+- `Sources/CoreDataRESTLayer/RESTClient.swift` — `URLSession` client for `GET /projects`, paginated `GET /projects/{projectID}/tasks`, and `PATCH /tasks/{taskID}`.
+- `Sources/CoreDataRESTLayer/VersionMapping.swift` — explicit API version / local model version compatibility skeleton.
 - `Sources/CoreDataRESTLayer/CoreDataStack.swift` — programmatic Core Data model with `CDProject` / `CDTask`, relationship, version, dirty, and conflict metadata.
-- `Sources/CoreDataRESTLayer/ProjectionSync.swift` — pull projection and dirty-task push/conflict recording.
-- `Sources/CoreDataRESTLayerTestServer/EmbeddedRESTServer.swift` — dependency-free `Network.framework` local HTTP server bound to `127.0.0.1:0`.
-- `Tests/CoreDataRESTLayerTests/CoreDataRESTLayerTests.swift` — acceptance tests for sync/edit/push and stale-write conflict flows.
+- `Sources/CoreDataRESTLayer/ProjectionSync.swift` — pull projection and dirty-task push/conflict recording; task pulls can use cursor, offset, or numbered-page pagination.
+- `Sources/CoreDataRESTLayerTestServer/EmbeddedRESTServer.swift` — dependency-free `Network.framework` local HTTP server bound to `127.0.0.1:0`, with pagination and latency hooks.
+- `Tests/CoreDataRESTLayerTests/CoreDataRESTLayerTests.swift` — acceptance tests for sync/edit/push, stale-write conflict, pagination, latency, and version headers.
 
 Current docs:
 
@@ -32,6 +33,7 @@ Current docs:
 - `docs/initial-questions.md` captures conceptual/API/Core Data questions.
 - `docs/plans/2026-05-22-core-data-rest-layer-first-spike-plan.md` defines the implemented first spike.
 - `docs/solutions/2026-05-22-first-projection-spike-findings.md` records initial findings.
+- `docs/solutions/2026-05-23-pagination-latency-versioning-findings.md` records pagination/latency/versioning findings.
 
 ## Working Direction
 
@@ -51,23 +53,25 @@ Done:
 
 - `001` — `todos/001-done-p1-write-first-spike-plan.md`
 - `002` — `todos/002-done-p1-build-embedded-server-projection.md`
+- `004` — `todos/004-done-p2-add-pagination-and-latency-cases.md`
 
 Pending:
 
 - `003` — `todos/003-pending-p3-evaluate-custom-persistent-store.md`
-- `004` — `todos/004-pending-p2-add-pagination-and-latency-cases.md`
 
 ## Open Questions
 
-Resolved for first spike:
+Resolved so far:
 
 - Server dependency: none; the embedded test server uses `Network.framework` plus tiny HTTP parsing.
-- Conflict mechanism: explicit integer `version` fields.
+- Conflict mechanism: explicit integer resource `version` fields.
 - First conflict state location: `CDTask.isDirty`, `CDTask.lastSyncError`, and `CDTask.conflictState`.
+- Pagination styles covered: cursor, offset, and numbered pages.
+- Versioning split: API version, local model version, and per-resource optimistic concurrency version are separate concepts.
 
 Still open:
 
-- Should loading/error/conflict state stay on managed objects, move to separate sync records, or live in caller state as scenarios grow?
+- Should loading/error/conflict/completeness state stay on managed objects, move to separate sync records, or live in caller state as scenarios grow?
 - Should local edits remain dirty flags on managed objects, or become separate pending-change entities / child-context units of work?
 - After pagination and latency pressure tests, does a custom persistent store still seem worth exploring?
 
@@ -80,8 +84,8 @@ cd experiments/core-data-rest-layer
 swift test
 ```
 
-Last verified 2026-05-22: 2 XCTest tests passed.
+Last verified 2026-05-23: 7 XCTest tests passed.
 
 ## Next Action
 
-Pick up `todos/004-pending-p2-add-pagination-and-latency-cases.md` to pressure-test loading/completeness state, or write a follow-up plan before exploring `todos/003-pending-p3-evaluate-custom-persistent-store.md`.
+Write a small follow-up plan for sync/completeness metadata, then decide whether `todos/003-pending-p3-evaluate-custom-persistent-store.md` is still worth a spike.

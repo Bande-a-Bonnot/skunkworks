@@ -47,6 +47,92 @@ final class CoreDataRESTLayerTests: XCTestCase {
         XCTAssertEqual(remoteTask.version, 2)
     }
 
+    func testPullAllCanTraversePaginatedTaskResponses() async throws {
+        let fixture = Fixture.make(taskCount: 5)
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try CoreDataStack()
+        let client = RESTClient(baseURL: try server.baseURL)
+        let sync = ProjectionSync(context: stack.viewContext, client: client, taskPageSize: 2)
+
+        let firstPage = try await client.fetchTaskCursorPage(projectID: fixture.project.id, limit: 2)
+        XCTAssertEqual(firstPage.items.count, 2)
+        XCTAssertEqual(firstPage.nextCursor, "2")
+
+        try await sync.pullAll()
+
+        let tasks = try stack.viewContext.fetch(CDTask.fetchRequestSortedByTitle())
+        XCTAssertEqual(tasks.count, 5)
+
+        let project = try XCTUnwrap(stack.viewContext.fetch(CDProject.fetchRequestSortedByName()).first)
+        XCTAssertEqual(project.tasks.count, 5)
+    }
+
+    func testPullAllCanTraverseOffsetTaskResponses() async throws {
+        let fixture = Fixture.make(taskCount: 5)
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try CoreDataStack()
+        let client = RESTClient(baseURL: try server.baseURL)
+        let sync = ProjectionSync(context: stack.viewContext, client: client, taskPagination: .offset(limit: 2))
+
+        let firstPage = try await client.fetchTaskOffsetPage(projectID: fixture.project.id, limit: 2, offset: 0)
+        XCTAssertEqual(firstPage.count, 2)
+
+        try await sync.pullAll()
+        XCTAssertEqual(try stack.viewContext.fetch(CDTask.fetchRequest()).count, 5)
+    }
+
+    func testPullAllCanTraverseNumberedTaskPages() async throws {
+        let fixture = Fixture.make(taskCount: 5)
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try CoreDataStack()
+        let client = RESTClient(baseURL: try server.baseURL)
+        let sync = ProjectionSync(context: stack.viewContext, client: client, taskPagination: .numberedPages(perPage: 2))
+
+        let firstPage = try await client.fetchTaskNumberedPage(projectID: fixture.project.id, page: 1, perPage: 2)
+        XCTAssertEqual(firstPage.items.count, 2)
+        XCTAssertEqual(firstPage.page, 1)
+        XCTAssertEqual(firstPage.totalPages, 3)
+
+        try await sync.pullAll()
+        XCTAssertEqual(try stack.viewContext.fetch(CDTask.fetchRequest()).count, 5)
+    }
+
+    func testClientSendsAPIAndLocalModelVersionHeaders() async throws {
+        let fixture = Fixture.make()
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let client = RESTClient(baseURL: try server.baseURL)
+        _ = try await client.fetchProjects()
+
+        XCTAssertEqual(server.lastRequestHeader("X-API-Version"), APIVersion.v1.rawValue)
+        XCTAssertEqual(server.lastRequestHeader("X-Local-Model-Version"), String(CoreDataStack.localModelVersion.rawValue))
+    }
+
+    func testServerCanInjectEndpointLatency() async throws {
+        let fixture = Fixture.make()
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+        server.setLatency(0.05, forPathPrefix: "/projects")
+
+        let client = RESTClient(baseURL: try server.baseURL)
+        let start = Date()
+        _ = try await client.fetchProjects()
+
+        XCTAssertGreaterThanOrEqual(Date().timeIntervalSince(start), 0.04)
+    }
+
     func testStaleLocalEditRecordsConflictWithoutOverwritingLocalAttempt() async throws {
         let fixture = Fixture.make()
         let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
@@ -101,7 +187,7 @@ private struct Fixture {
     var tasks: [RemoteTask]
     var firstTaskID: UUID
 
-    static func make() -> Fixture {
+    static func make(taskCount: Int = 2) -> Fixture {
         let projectID = UUID(uuidString: "019e5066-a278-7de1-9e10-f1fd49f20a21")!
         let firstTaskID = UUID(uuidString: "019e5066-ce73-7c9b-a401-c65be5a86d74")!
         let secondTaskID = UUID(uuidString: "019e5067-0a52-7c3f-9ea8-99d4b498b5b6")!
@@ -112,7 +198,7 @@ private struct Fixture {
             updatedAt: baseDate,
             version: 1
         )
-        let tasks = [
+        var tasks = [
             RemoteTask(
                 id: firstTaskID,
                 projectId: projectID,
@@ -131,6 +217,21 @@ private struct Fixture {
             )
         ]
 
-        return Fixture(project: project, tasks: tasks, firstTaskID: firstTaskID)
+        if taskCount > tasks.count {
+            for index in (tasks.count + 1)...taskCount {
+                tasks.append(
+                    RemoteTask(
+                        id: UUID(),
+                        projectId: projectID,
+                        title: String(format: "Extra task %02d", index),
+                        status: "open",
+                        updatedAt: baseDate,
+                        version: 1
+                    )
+                )
+            }
+        }
+
+        return Fixture(project: project, tasks: Array(tasks.prefix(taskCount)), firstTaskID: firstTaskID)
     }
 }

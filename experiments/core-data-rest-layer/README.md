@@ -93,7 +93,7 @@ Plan: `docs/plans/2026-05-22-core-data-rest-layer-first-spike-plan.md`.
 - `docs/HANDOFF.md` — current state and exact next action.
 - `docs/initial-questions.md` — question bank.
 - `Package.swift` — Swift package harness.
-- `Sources/CoreDataRESTLayer/` — REST models/client, programmatic Core Data model, projection sync.
+- `Sources/CoreDataRESTLayer/` — REST models/client, API/model version mapping, programmatic Core Data model, projection sync.
 - `Sources/CoreDataRESTLayerTestServer/` — embedded deterministic HTTP server for tests.
 - `Tests/CoreDataRESTLayerTests/` — acceptance tests for sync/edit/push/conflict flows.
 - `todos/` — local task breakdown.
@@ -105,7 +105,7 @@ cd experiments/core-data-rest-layer
 swift test
 ```
 
-The test harness starts an embedded REST server on `127.0.0.1:0`, fetches through `URLSession`, projects remote resources into an in-memory Core Data store, pushes a dirty local task edit, and verifies stale-write conflict handling.
+The test harness starts an embedded REST server on `127.0.0.1:0`, fetches through `URLSession`, projects remote resources into an in-memory Core Data store, pushes a dirty local task edit, verifies stale-write conflict handling, and exercises cursor/offset/numbered-page pagination plus endpoint latency.
 
 ## Notes / Findings
 
@@ -115,6 +115,8 @@ The test harness starts an embedded REST server on `127.0.0.1:0`, fetches throug
 - Prefer an embedded local server over static fixtures so tests exercise real HTTP semantics.
 - First finding: a materialized Core Data projection makes app-style relationship/fetch access pleasant after explicit sync, but conflict/loading/error state must stay explicit in the model or surrounding sync layer.
 - First finding: Core Data dirty tracking is useful as a local unit-of-work marker, but versioned REST conflicts should not be hidden behind `save()` semantics.
+- Pagination style is part of the remote contract and leaks into sync/completeness semantics; it should not be hidden as a transparent relationship fault.
+- Keep API version, local Core Data model version, and per-resource optimistic concurrency version separate.
 
 ## Next Ideas
 
@@ -123,7 +125,7 @@ The test harness starts an embedded REST server on `127.0.0.1:0`, fetches throug
 - [x] Model project/task resources.
 - [x] Implement embedded local REST server.
 - [x] Simulate stale writes/conflicts.
-- [ ] Later: simulate latency and pagination.
+- [x] Later: simulate latency and pagination.
 - [ ] Write down which Core Data features remain pleasant over REST in more detail.
 
 ## Cleanup / Graduation

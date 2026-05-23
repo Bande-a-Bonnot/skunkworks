@@ -9,17 +9,31 @@ public enum PushOutcome: Equatable {
 public final class ProjectionSync {
     private let context: NSManagedObjectContext
     private let client: RESTClient
+    private let taskPagination: TaskPaginationStrategy
 
-    public init(context: NSManagedObjectContext, client: RESTClient) {
+    public init(
+        context: NSManagedObjectContext,
+        client: RESTClient,
+        taskPagination: TaskPaginationStrategy = .none
+    ) {
         self.context = context
         self.client = client
+        self.taskPagination = taskPagination
+    }
+
+    public convenience init(context: NSManagedObjectContext, client: RESTClient, taskPageSize: Int?) {
+        self.init(
+            context: context,
+            client: client,
+            taskPagination: taskPageSize.map { .cursor(limit: $0) } ?? .none
+        )
     }
 
     public func pullAll() async throws {
         let projects = try await client.fetchProjects()
         var tasksByProjectID: [UUID: [RemoteTask]] = [:]
         for project in projects {
-            tasksByProjectID[project.id] = try await client.fetchTasks(projectID: project.id)
+            tasksByProjectID[project.id] = try await client.fetchTasks(projectID: project.id, pagination: taskPagination)
         }
 
         try await context.perform {

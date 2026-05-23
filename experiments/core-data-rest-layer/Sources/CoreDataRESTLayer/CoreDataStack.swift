@@ -24,6 +24,8 @@ public class CDTask: NSManagedObject {
 }
 
 public final class CoreDataStack {
+    public static let localModelVersion: LocalModelVersion = .v1
+
     public let container: NSPersistentContainer
 
     public var viewContext: NSManagedObjectContext {

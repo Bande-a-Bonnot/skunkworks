@@ -26,6 +26,9 @@ The acceptance tests cover:
 
 ## Next useful pressure tests
 
-- Add latency/cancellation hooks to see whether loading state belongs on entities, separate sync records, or caller state.
-- Add pagination to test whether relationship completeness needs explicit metadata.
-- Expand conflict metadata beyond a string if merge/resolve flows become interesting.
+- [x] Add latency hooks to see whether loading state belongs on entities, separate sync records, or caller state.
+- [x] Add pagination to test whether relationship completeness needs explicit metadata.
+- [ ] Add cancellation hooks.
+- [ ] Expand conflict metadata beyond a string if merge/resolve flows become interesting.
+
+Follow-up findings: `2026-05-23-pagination-latency-versioning-findings.md`.

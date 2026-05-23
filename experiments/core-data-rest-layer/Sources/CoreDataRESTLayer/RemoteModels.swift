@@ -44,6 +44,30 @@ public struct TaskPatch: Codable, Equatable, Sendable {
     }
 }
 
+public struct CursorPage<Item: Codable & Equatable & Sendable>: Codable, Equatable, Sendable {
+    public var items: [Item]
+    public var nextCursor: String?
+
+    public init(items: [Item], nextCursor: String?) {
+        self.items = items
+        self.nextCursor = nextCursor
+    }
+}
+
+public struct NumberedPage<Item: Codable & Equatable & Sendable>: Codable, Equatable, Sendable {
+    public var items: [Item]
+    public var page: Int
+    public var perPage: Int
+    public var totalPages: Int?
+
+    public init(items: [Item], page: Int, perPage: Int, totalPages: Int?) {
+        self.items = items
+        self.page = page
+        self.perPage = perPage
+        self.totalPages = totalPages
+    }
+}
+
 public enum JSONCoding {
     public static func makeEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
