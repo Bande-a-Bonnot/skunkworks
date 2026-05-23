@@ -85,6 +85,81 @@ final class CoreDataRESTLayerTests: XCTestCase {
         XCTAssertEqual(server.requestCount(forPath: "/tasks/\(fixture.firstTaskID.uuidString)"), 1)
     }
 
+    func testRESTIncrementalStoreFetchHTTPErrorThrowsTypedStatus() throws {
+        let fixture = Fixture.make()
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+        server.setForcedResponse(status: 503, body: "projects unavailable", forPathPrefix: "/projects", method: "GET")
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL)
+
+        XCTAssertThrowsError(try stack.context.fetch(CDProject.fetchRequestSortedByName())) { error in
+            assertHTTPStatus(error, status: 503, bodyContains: "projects unavailable")
+        }
+    }
+
+    func testRESTIncrementalStoreRelationshipFaultHTTPErrorThrowsTypedStatus() throws {
+        let fixture = Fixture.make()
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL)
+        let project = try XCTUnwrap(stack.context.fetch(CDProject.fetchRequestSortedByName()).first)
+        server.setForcedResponse(
+            status: 502,
+            body: "tasks unavailable",
+            forPathPrefix: "/projects/\(fixture.project.id.uuidString)/tasks",
+            method: "GET"
+        )
+
+        let store = try XCTUnwrap(stack.coordinator.persistentStores.first as? RESTIncrementalStore)
+        let relationship = try XCTUnwrap(project.entity.relationshipsByName["tasks"])
+        XCTAssertThrowsError(
+            try store.newValue(forRelationship: relationship, forObjectWith: project.objectID, with: stack.context)
+        ) { error in
+            assertHTTPStatus(error, status: 502, bodyContains: "tasks unavailable")
+        }
+    }
+
+    func testRESTIncrementalStoreSaveHTTPErrorThrowsTypedStatus() throws {
+        let fixture = Fixture.make()
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL)
+        let project = try XCTUnwrap(stack.context.fetch(CDProject.fetchRequestSortedByName()).first)
+        let task = try XCTUnwrap(project.tasks.first { $0.id == fixture.firstTaskID })
+        server.setForcedResponse(
+            status: 500,
+            body: "save unavailable",
+            forPathPrefix: "/tasks/\(fixture.firstTaskID.uuidString)",
+            method: "PATCH"
+        )
+
+        task.title = "Will fail"
+        XCTAssertThrowsError(try stack.context.save()) { error in
+            assertHTTPStatus(error, status: 500, bodyContains: "save unavailable")
+        }
+    }
+
+    func testRESTIncrementalStoreBackgroundContextCanRunBlockingRESTWorkOffMainContext() throws {
+        let fixture = Fixture.make()
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL)
+        let context = stack.makeBackgroundContext()
+        let fetchedNames = try context.performAndWait {
+            try context.fetch(CDProject.fetchRequestSortedByName()).map(\.name)
+        }
+
+        XCTAssertEqual(fetchedNames, ["Skunkworks"])
+    }
+
     func testRESTIncrementalStoreSaveConflictMarksObjectAndThrows() throws {
         let fixture = Fixture.make()
         let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
@@ -281,6 +356,25 @@ final class CoreDataRESTLayerTests: XCTestCase {
         XCTAssertTrue(conflictedTask.isDirty)
         XCTAssertEqual(conflictedTask.conflictState, "remoteVersion=2")
         XCTAssertTrue(conflictedTask.lastSyncError?.contains("Remote won first") == true)
+    }
+
+    private func assertHTTPStatus(
+        _ error: Error,
+        status: Int,
+        bodyContains expectedBodyFragment: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        guard case RESTIncrementalStoreError.httpStatus(let actualStatus, let body) = error else {
+            return XCTFail("Expected RESTIncrementalStoreError.httpStatus, got \(error)", file: file, line: line)
+        }
+        XCTAssertEqual(actualStatus, status, file: file, line: line)
+        XCTAssertTrue(body.contains(expectedBodyFragment), file: file, line: line)
+
+        let nsError = error as NSError
+        XCTAssertEqual(nsError.domain, RESTIncrementalStoreError.errorDomain, file: file, line: line)
+        XCTAssertEqual(nsError.code, RESTIncrementalStoreError.httpStatus(status, "").errorCode, file: file, line: line)
+        XCTAssertEqual(nsError.userInfo["HTTPStatusCode"] as? Int, status, file: file, line: line)
     }
 
     private func fetchTask(id: UUID, in context: NSManagedObjectContext) throws -> CDTask? {

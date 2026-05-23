@@ -27,6 +27,7 @@ public final class EmbeddedRESTServer {
     private var projects: [UUID: RemoteProject]
     private var tasks: [UUID: RemoteTask]
     private var endpointLatencies: [String: TimeInterval] = [:]
+    private var forcedResponsesByPathPrefix: [String: ForcedResponse] = [:]
     private var lastRequestHeaders: [String: String] = [:]
     private var lastRequestPath: String?
     private var requestCountsByPath: [String: Int] = [:]
@@ -115,6 +116,17 @@ public final class EmbeddedRESTServer {
         }
     }
 
+    public func setForcedResponse(
+        status: Int,
+        body: String,
+        forPathPrefix pathPrefix: String,
+        method: String? = nil
+    ) {
+        stateQueue.sync {
+            forcedResponsesByPathPrefix[pathPrefix] = ForcedResponse(method: method, status: status, body: body)
+        }
+    }
+
     public func lastRequestHeader(_ name: String) -> String? {
         stateQueue.sync {
             lastRequestHeaders[name.lowercased()]
@@ -172,11 +184,28 @@ public final class EmbeddedRESTServer {
             Thread.sleep(forTimeInterval: latency)
         }
 
+        if let forcedResponse = forcedResponse(for: request) {
+            send(response: .text(status: forcedResponse.status, body: forcedResponse.body), on: connection)
+            return
+        }
+
         do {
             let response = try route(request)
             send(response: response, on: connection)
         } catch {
             send(response: .text(status: 500, body: String(describing: error)), on: connection)
+        }
+    }
+
+    private func forcedResponse(for request: HTTPRequest) -> ForcedResponse? {
+        stateQueue.sync {
+            forcedResponsesByPathPrefix
+                .filter { prefix, response in
+                    request.path.hasPrefix(prefix) && (response.method == nil || response.method == request.method)
+                }
+                .sorted { $0.key.count > $1.key.count }
+                .first?
+                .value
         }
     }
 
@@ -293,6 +322,12 @@ public final class EmbeddedRESTServer {
 private struct ConflictResponse: Codable {
     var error: String
     var current: RemoteTask
+}
+
+private struct ForcedResponse {
+    var method: String?
+    var status: Int
+    var body: String
 }
 
 private struct HTTPRequest {

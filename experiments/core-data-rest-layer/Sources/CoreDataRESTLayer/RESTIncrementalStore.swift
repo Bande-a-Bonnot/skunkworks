@@ -1,7 +1,7 @@
 import CoreData
 import Foundation
 
-public enum RESTIncrementalStoreError: Error, CustomStringConvertible {
+public enum RESTIncrementalStoreError: Error, CustomStringConvertible, CustomNSError {
     case missingBaseURL
     case invalidReferenceObject(Any)
     case unsupportedRequest(NSPersistentStoreRequestType)
@@ -10,6 +10,50 @@ public enum RESTIncrementalStoreError: Error, CustomStringConvertible {
     case invalidResponse
     case httpStatus(Int, String)
     case conflict(remote: RemoteTask)
+
+    public static var errorDomain: String {
+        "CoreDataRESTLayer.RESTIncrementalStoreError"
+    }
+
+    public var errorCode: Int {
+        switch self {
+        case .missingBaseURL: return 1
+        case .invalidReferenceObject: return 2
+        case .unsupportedRequest: return 3
+        case .unsupportedEntity: return 4
+        case .unsupportedRelationship: return 5
+        case .invalidResponse: return 6
+        case .httpStatus: return 7
+        case .conflict: return 8
+        }
+    }
+
+    public var errorUserInfo: [String: Any] {
+        var userInfo: [String: Any] = [NSLocalizedDescriptionKey: description]
+        switch self {
+        case let .httpStatus(status, body):
+            userInfo["HTTPStatusCode"] = status
+            userInfo["ResponseBody"] = body
+        case let .conflict(remote):
+            userInfo["RemoteTaskID"] = remote.id.uuidString
+            userInfo["RemoteVersion"] = remote.version
+            userInfo["RemoteTitle"] = remote.title
+            userInfo["RemoteStatus"] = remote.status
+        case let .invalidReferenceObject(reference):
+            userInfo["ReferenceObject"] = String(describing: reference)
+        case let .unsupportedRequest(type):
+            userInfo["PersistentStoreRequestType"] = type.rawValue
+        case let .unsupportedEntity(entity):
+            if let entity {
+                userInfo["EntityName"] = entity
+            }
+        case let .unsupportedRelationship(relationship):
+            userInfo["RelationshipName"] = relationship
+        case .missingBaseURL, .invalidResponse:
+            break
+        }
+        return userInfo
+    }
 
     public var description: String {
         switch self {
@@ -51,6 +95,12 @@ public final class RESTCoreDataStack {
 
         context = NSManagedObjectContext(concurrencyType: .mainQueueConcurrencyType)
         context.persistentStoreCoordinator = coordinator
+    }
+
+    public func makeBackgroundContext() -> NSManagedObjectContext {
+        let context = NSManagedObjectContext(concurrencyType: .privateQueueConcurrencyType)
+        context.persistentStoreCoordinator = coordinator
+        return context
     }
 }
 
@@ -103,7 +153,8 @@ public final class RESTIncrementalStore: NSIncrementalStore {
             NSStoreUUIDKey: UUID().uuidString,
             "RESTBaseURL": baseURL.absoluteString,
             "LocalModelVersion": CoreDataStack.localModelVersion.rawValue,
-            "WritableAPIVersion": APIModelVersionMapping.current.writableAPIVersion.rawValue
+            "WritableAPIVersion": APIModelVersionMapping.current.writableAPIVersion.rawValue,
+            "TaskPaginationStrategy": String(describing: taskPagination)
         ]
     }
 
