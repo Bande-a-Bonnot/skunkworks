@@ -78,7 +78,7 @@ Root todos track repo-level or cross-experiment work only. Experiment-specific w
 
 ## Likely Next Actions
 
-1. Continue `core-data-rest-layer` by choosing the next local todo; partial object/field loading (`008`) is done.
+1. Continue `core-data-rest-layer` by choosing/opening the next local todo; partial object/field loading and the feature synthesis note are done.
 2. Keep root handoff minimal; update experiment-local handoff with implementation details.
 3. Decide later whether `experiments/README.md` should stay a manual catalog, become generated, or both.
 

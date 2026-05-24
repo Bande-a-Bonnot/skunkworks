@@ -39,6 +39,7 @@ Current docs:
 - `docs/solutions/2026-05-23-rest-store-ergonomics-and-error-policy.md` records error/execution/completeness recommendations.
 - `docs/solutions/2026-05-24-relationship-sync-state-findings.md` records managed relationship-state findings.
 - `docs/solutions/2026-05-24-partial-field-loading-findings.md` records partial field/detail loading findings.
+- `docs/solutions/2026-05-24-core-data-over-rest-synthesis.md` synthesizes which Core Data features remain pleasant over REST and where REST semantics must stay explicit.
 
 ## Working Direction
 
@@ -100,6 +101,6 @@ Last verified 2026-05-24: 20 XCTest tests passed.
 
 No ready local todo remains. Good next options:
 
-1. Write a synthesis note on which Core Data features remain pleasant over REST.
-2. Open a new todo for pending-change entities / child-context unit-of-work semantics.
-3. Open a new todo for cancellation/timeout behavior around synchronous `NSIncrementalStore` methods.
+1. Open a new todo for pending-change entities / child-context unit-of-work semantics.
+2. Open a new todo for cancellation/timeout behavior around synchronous `NSIncrementalStore` methods.
+3. Decide whether to graduate this into a small library prototype or archive it as findings.

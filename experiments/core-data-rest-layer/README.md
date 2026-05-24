@@ -123,6 +123,7 @@ The test harness starts an embedded REST server on `127.0.0.1:0`. The current me
 - Pagination style is part of the remote contract and leaks into sync/completeness semantics; it should not be hidden as a transparent relationship fault.
 - Partial scalar fields need explicit completeness metadata: `CDTask.loadedFields == "summary"` means nullable detail fields such as `notes` are not authoritative yet.
 - Detail-only scalar fields should load through explicit refresh APIs (`RESTCoreDataStack.loadTaskDetails(for:)`), not hidden property access that performs synchronous network work.
+- Synthesis verdict: Core Data stays useful as an object graph and unit-of-work API, but REST loading/completeness/conflict state must remain explicit.
 - Keep API version, local Core Data model version, and per-resource optimistic concurrency version separate.
 
 ## Next Ideas
@@ -134,7 +135,7 @@ The test harness starts an embedded REST server on `127.0.0.1:0`. The current me
 - [x] Simulate stale writes/conflicts.
 - [x] Later: simulate latency and pagination.
 - [x] Explore partial object/field loading semantics in the custom-store path.
-- [ ] Write down which Core Data features remain pleasant over REST in more detail.
+- [x] Write down which Core Data features remain pleasant over REST in more detail.
 
 ## Cleanup / Graduation
 
