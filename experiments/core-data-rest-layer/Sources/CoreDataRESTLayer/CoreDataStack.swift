@@ -23,6 +23,21 @@ public class CDTask: NSManagedObject {
     @NSManaged public var project: CDProject?
 }
 
+@objc(CDRemoteRelationshipState)
+public class CDRemoteRelationshipState: NSManagedObject {
+    @NSManaged public var id: String
+    @NSManaged public var ownerEntityName: String
+    @NSManaged public var ownerRemoteID: String
+    @NSManaged public var relationshipName: String
+    @NSManaged public var paginationMode: String
+    @NSManaged public var isComplete: Bool
+    @NSManaged public var fetchedCount: Int64
+    @NSManaged public var totalCount: Int64
+    @NSManaged public var nextCursor: String?
+    @NSManaged public var lastLoadedAt: Date?
+    @NSManaged public var lastError: String?
+}
+
 public final class CoreDataStack {
     public static let localModelVersion: LocalModelVersion = .v1
 
@@ -82,6 +97,22 @@ public final class CoreDataStack {
         let taskLastSyncError = attribute("lastSyncError", .stringAttributeType, optional: true)
         let taskConflictState = attribute("conflictState", .stringAttributeType, optional: true)
 
+        let relationshipState = NSEntityDescription()
+        relationshipState.name = "CDRemoteRelationshipState"
+        relationshipState.managedObjectClassName = NSStringFromClass(CDRemoteRelationshipState.self)
+
+        let stateId = attribute("id", .stringAttributeType, optional: false)
+        let stateOwnerEntityName = attribute("ownerEntityName", .stringAttributeType, optional: false)
+        let stateOwnerRemoteID = attribute("ownerRemoteID", .stringAttributeType, optional: false)
+        let stateRelationshipName = attribute("relationshipName", .stringAttributeType, optional: false)
+        let statePaginationMode = attribute("paginationMode", .stringAttributeType, optional: false)
+        let stateIsComplete = attribute("isComplete", .booleanAttributeType, optional: false, defaultValue: false)
+        let stateFetchedCount = attribute("fetchedCount", .integer64AttributeType, optional: false, defaultValue: 0)
+        let stateTotalCount = attribute("totalCount", .integer64AttributeType, optional: false, defaultValue: 0)
+        let stateNextCursor = attribute("nextCursor", .stringAttributeType, optional: true)
+        let stateLastLoadedAt = attribute("lastLoadedAt", .dateAttributeType, optional: true)
+        let stateLastError = attribute("lastError", .stringAttributeType, optional: true)
+
         let projectTasks = NSRelationshipDescription()
         projectTasks.name = "tasks"
         projectTasks.destinationEntity = task
@@ -113,11 +144,25 @@ public final class CoreDataStack {
             taskConflictState,
             taskProject
         ]
+        relationshipState.properties = [
+            stateId,
+            stateOwnerEntityName,
+            stateOwnerRemoteID,
+            stateRelationshipName,
+            statePaginationMode,
+            stateIsComplete,
+            stateFetchedCount,
+            stateTotalCount,
+            stateNextCursor,
+            stateLastLoadedAt,
+            stateLastError
+        ]
 
         project.uniquenessConstraints = [["id"]]
         task.uniquenessConstraints = [["id"]]
+        relationshipState.uniquenessConstraints = [["id"]]
 
-        model.entities = [project, task]
+        model.entities = [project, task, relationshipState]
         return model
     }
 
@@ -156,6 +201,18 @@ public extension CDTask {
     static func fetchRequestSortedByTitle() -> NSFetchRequest<CDTask> {
         let request = fetchRequest()
         request.sortDescriptors = [NSSortDescriptor(key: "title", ascending: true)]
+        return request
+    }
+}
+
+public extension CDRemoteRelationshipState {
+    static func fetchRequest() -> NSFetchRequest<CDRemoteRelationshipState> {
+        NSFetchRequest<CDRemoteRelationshipState>(entityName: "CDRemoteRelationshipState")
+    }
+
+    static func fetchRequestSortedByID() -> NSFetchRequest<CDRemoteRelationshipState> {
+        let request = fetchRequest()
+        request.sortDescriptors = [NSSortDescriptor(key: "id", ascending: true)]
         return request
     }
 }

@@ -117,6 +117,7 @@ public final class RESTIncrementalStore: NSIncrementalStore {
     private var projectCache: [UUID: RemoteProject] = [:]
     private var taskCache: [UUID: RemoteTask] = [:]
     private var taskIDsByProjectID: [UUID: [UUID]] = [:]
+    private var relationshipStateCache: [String: RemoteRelationshipStateSnapshot] = [:]
 
     public static func registerStoreClass() {
         NSPersistentStoreCoordinator.registerStoreClass(Self.self, forStoreType: storeType)
@@ -188,6 +189,11 @@ public final class RESTIncrementalStore: NSIncrementalStore {
             return tasks.map { task in
                 context.object(with: newObjectID(for: entity(named: "CDTask"), referenceObject: task.id.uuidString))
             }
+        case "CDRemoteRelationshipState":
+            let states = lock.withLock { Array(relationshipStateCache.values) }
+            return states.map { state in
+                context.object(with: newObjectID(for: entity(named: "CDRemoteRelationshipState"), referenceObject: state.id))
+            }
         default:
             throw RESTIncrementalStoreError.unsupportedEntity(fetchRequest.entity?.name)
         }
@@ -197,11 +203,9 @@ public final class RESTIncrementalStore: NSIncrementalStore {
         with objectID: NSManagedObjectID,
         with context: NSManagedObjectContext?
     ) throws -> NSIncrementalStoreNode {
-        let id = try uuidReference(from: objectID)
-
         switch objectID.entity.name {
         case "CDProject":
-            let project = try cachedProject(id: id)
+            let project = try cachedProject(id: try uuidReference(from: objectID))
             return NSIncrementalStoreNode(
                 objectID: objectID,
                 withValues: [
@@ -213,7 +217,7 @@ public final class RESTIncrementalStore: NSIncrementalStore {
                 version: UInt64(project.version)
             )
         case "CDTask":
-            let task = try cachedTask(id: id)
+            let task = try cachedTask(id: try uuidReference(from: objectID))
             let values: [String: Any] = [
                 "id": task.id,
                 "title": task.title,
@@ -226,6 +230,13 @@ public final class RESTIncrementalStore: NSIncrementalStore {
                 objectID: objectID,
                 withValues: values,
                 version: UInt64(task.version)
+            )
+        case "CDRemoteRelationshipState":
+            let state = try cachedRelationshipState(reference: try stringReference(from: objectID))
+            return NSIncrementalStoreNode(
+                objectID: objectID,
+                withValues: state.values,
+                version: UInt64(state.version)
             )
         default:
             throw RESTIncrementalStoreError.unsupportedEntity(objectID.entity.name)
@@ -240,11 +251,31 @@ public final class RESTIncrementalStore: NSIncrementalStore {
         switch (objectID.entity.name, relationship.name) {
         case ("CDProject", "tasks"):
             let projectID = try uuidReference(from: objectID)
-            let tasks = try fetchRemoteTasks(projectID: projectID, pagination: taskPagination)
-            let ids = tasks.map { task in
-                self.newObjectID(for: entity(named: "CDTask"), referenceObject: task.id.uuidString)
+            do {
+                let tasks = try fetchRemoteTasks(projectID: projectID, pagination: taskPagination)
+                updateRelationshipState(
+                    ownerEntityName: "CDProject",
+                    ownerRemoteID: projectID.uuidString,
+                    relationshipName: "tasks",
+                    fetchedCount: tasks.count,
+                    isComplete: true,
+                    lastError: nil
+                )
+                let ids = tasks.map { task in
+                    self.newObjectID(for: entity(named: "CDTask"), referenceObject: task.id.uuidString)
+                }
+                return NSSet(array: ids)
+            } catch {
+                updateRelationshipState(
+                    ownerEntityName: "CDProject",
+                    ownerRemoteID: projectID.uuidString,
+                    relationshipName: "tasks",
+                    fetchedCount: 0,
+                    isComplete: false,
+                    lastError: String(describing: error)
+                )
+                throw error
             }
-            return NSSet(array: ids)
         case ("CDTask", "project"):
             let taskID = try uuidReference(from: objectID)
             let task = try cachedTask(id: taskID)
@@ -256,6 +287,10 @@ public final class RESTIncrementalStore: NSIncrementalStore {
 
     public override func obtainPermanentIDs(for array: [NSManagedObject]) throws -> [NSManagedObjectID] {
         try array.map { object in
+            if object.entity.name == "CDRemoteRelationshipState",
+               let id = object.value(forKey: "id") as? String {
+                return newObjectID(for: object.entity, referenceObject: id)
+            }
             guard let id = object.value(forKey: "id") as? UUID else {
                 throw RESTIncrementalStoreError.invalidReferenceObject(object)
             }
@@ -341,6 +376,45 @@ public final class RESTIncrementalStore: NSIncrementalStore {
         }()
     }
 
+    private func cachedRelationshipState(reference: String) throws -> RemoteRelationshipStateSnapshot {
+        if let state = lock.withLock({ relationshipStateCache[reference] }) {
+            return state
+        }
+        throw RESTIncrementalStoreError.invalidReferenceObject(reference)
+    }
+
+    private func updateRelationshipState(
+        ownerEntityName: String,
+        ownerRemoteID: String,
+        relationshipName: String,
+        fetchedCount: Int,
+        isComplete: Bool,
+        lastError: String?
+    ) {
+        let id = Self.relationshipStateID(
+            ownerEntityName: ownerEntityName,
+            ownerRemoteID: ownerRemoteID,
+            relationshipName: relationshipName
+        )
+        let state = RemoteRelationshipStateSnapshot(
+            id: id,
+            ownerEntityName: ownerEntityName,
+            ownerRemoteID: ownerRemoteID,
+            relationshipName: relationshipName,
+            paginationMode: Self.paginationDescription(taskPagination),
+            isComplete: isComplete,
+            fetchedCount: fetchedCount,
+            totalCount: isComplete ? fetchedCount : 0,
+            nextCursor: nil,
+            lastLoadedAt: isComplete ? Date() : nil,
+            lastError: lastError,
+            version: (lock.withLock { relationshipStateCache[id]?.version } ?? 0) + 1
+        )
+        lock.withLock {
+            relationshipStateCache[id] = state
+        }
+    }
+
     private func uuidReference(from objectID: NSManagedObjectID) throws -> UUID {
         let reference = referenceObject(for: objectID)
         if let uuid = reference as? UUID {
@@ -348,6 +422,14 @@ public final class RESTIncrementalStore: NSIncrementalStore {
         }
         if let string = reference as? String, let uuid = UUID(uuidString: string) {
             return uuid
+        }
+        throw RESTIncrementalStoreError.invalidReferenceObject(reference as Any)
+    }
+
+    private func stringReference(from objectID: NSManagedObjectID) throws -> String {
+        let reference = referenceObject(for: objectID)
+        if let string = reference as? String {
+            return string
         }
         throw RESTIncrementalStoreError.invalidReferenceObject(reference as Any)
     }
@@ -376,6 +458,65 @@ public final class RESTIncrementalStore: NSIncrementalStore {
         default:
             return .none
         }
+    }
+
+    private static func paginationDescription(_ pagination: TaskPaginationStrategy) -> String {
+        switch pagination {
+        case .none:
+            return "none"
+        case let .cursor(limit):
+            return "cursor(limit:\(limit))"
+        case let .offset(limit):
+            return "offset(limit:\(limit))"
+        case let .numberedPages(perPage):
+            return "numberedPages(perPage:\(perPage))"
+        }
+    }
+
+    private static func relationshipStateID(
+        ownerEntityName: String,
+        ownerRemoteID: String,
+        relationshipName: String
+    ) -> String {
+        "\(ownerEntityName):\(ownerRemoteID):\(relationshipName)"
+    }
+}
+
+private struct RemoteRelationshipStateSnapshot {
+    var id: String
+    var ownerEntityName: String
+    var ownerRemoteID: String
+    var relationshipName: String
+    var paginationMode: String
+    var isComplete: Bool
+    var fetchedCount: Int
+    var totalCount: Int
+    var nextCursor: String?
+    var lastLoadedAt: Date?
+    var lastError: String?
+    var version: Int
+
+    var values: [String: Any] {
+        var values: [String: Any] = [
+            "id": id,
+            "ownerEntityName": ownerEntityName,
+            "ownerRemoteID": ownerRemoteID,
+            "relationshipName": relationshipName,
+            "paginationMode": paginationMode,
+            "isComplete": isComplete,
+            "fetchedCount": Int64(fetchedCount),
+            "totalCount": Int64(totalCount)
+        ]
+        if let nextCursor {
+            values["nextCursor"] = nextCursor
+        }
+        if let lastLoadedAt {
+            values["lastLoadedAt"] = lastLoadedAt
+        }
+        if let lastError {
+            values["lastError"] = lastError
+        }
+        return values
     }
 }
 

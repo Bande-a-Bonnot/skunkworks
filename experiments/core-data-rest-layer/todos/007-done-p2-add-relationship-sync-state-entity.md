@@ -1,5 +1,5 @@
 ---
-status: ready
+status: done
 priority: p2
 issue_id: "007"
 tags: [core-data, custom-store, pagination, sync-state]
@@ -9,6 +9,8 @@ dependencies: ["006"]
 # Add Relationship Sync State Entity
 
 Represent remote relationship completeness inside the custom-store Core Data model without reverting to a projection sync layer.
+
+Done: added `CDRemoteRelationshipState`; the REST incremental store records complete/incomplete metadata after `Project.tasks` relationship fault loads or fails.
 
 ## Acceptance Criteria
 

@@ -36,6 +36,63 @@ final class CoreDataRESTLayerTests: XCTestCase {
         XCTAssertEqual(server.requestCount(forPath: "/projects/\(fixture.project.id.uuidString)/tasks"), 3)
     }
 
+    func testRESTIncrementalStoreRelationshipFaultWritesCompletenessState() throws {
+        let fixture = Fixture.make(taskCount: 5)
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL, taskPagination: .cursor(limit: 2))
+        let project = try XCTUnwrap(stack.context.fetch(CDProject.fetchRequestSortedByName()).first)
+        XCTAssertTrue(try stack.context.fetch(CDRemoteRelationshipState.fetchRequest()).isEmpty)
+
+        XCTAssertEqual(project.tasks.count, 5)
+
+        let states = try stack.context.fetch(CDRemoteRelationshipState.fetchRequestSortedByID())
+        let state = try XCTUnwrap(states.first)
+        XCTAssertEqual(states.count, 1)
+        XCTAssertEqual(state.ownerEntityName, "CDProject")
+        XCTAssertEqual(state.ownerRemoteID, fixture.project.id.uuidString)
+        XCTAssertEqual(state.relationshipName, "tasks")
+        XCTAssertEqual(state.paginationMode, "cursor(limit:2)")
+        XCTAssertTrue(state.isComplete)
+        XCTAssertEqual(state.fetchedCount, 5)
+        XCTAssertEqual(state.totalCount, 5)
+        XCTAssertNil(state.nextCursor)
+        XCTAssertNotNil(state.lastLoadedAt)
+        XCTAssertNil(state.lastError)
+    }
+
+    func testRESTIncrementalStoreRelationshipFaultFailureWritesIncompleteState() throws {
+        let fixture = Fixture.make(taskCount: 5)
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL, taskPagination: .cursor(limit: 2))
+        let project = try XCTUnwrap(stack.context.fetch(CDProject.fetchRequestSortedByName()).first)
+        server.setForcedResponse(
+            status: 502,
+            body: "tasks unavailable",
+            forPathPrefix: "/projects/\(fixture.project.id.uuidString)/tasks",
+            method: "GET"
+        )
+
+        let store = try XCTUnwrap(stack.coordinator.persistentStores.first as? RESTIncrementalStore)
+        let relationship = try XCTUnwrap(project.entity.relationshipsByName["tasks"])
+        XCTAssertThrowsError(
+            try store.newValue(forRelationship: relationship, forObjectWith: project.objectID, with: stack.context)
+        )
+
+        let state = try XCTUnwrap(stack.context.fetch(CDRemoteRelationshipState.fetchRequestSortedByID()).first)
+        XCTAssertEqual(state.paginationMode, "cursor(limit:2)")
+        XCTAssertFalse(state.isComplete)
+        XCTAssertEqual(state.fetchedCount, 0)
+        XCTAssertEqual(state.totalCount, 0)
+        XCTAssertNil(state.lastLoadedAt)
+        XCTAssertTrue(state.lastError?.contains("tasks unavailable") == true)
+    }
+
     func testRESTIncrementalStoreRelationshipFaultCanTraverseOffsetPages() throws {
         let fixture = Fixture.make(taskCount: 5)
         let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)

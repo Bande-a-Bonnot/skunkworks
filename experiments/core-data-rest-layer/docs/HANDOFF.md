@@ -1,7 +1,7 @@
 # Core Data REST Layer Handoff
 
 **URN:** `skunkworks::local::experiment::core-data-rest-layer::handoff::019e4c87-dd7e-708c-be24-fda71b3451b3`  
-**Last updated:** 2026-05-23
+**Last updated:** 2026-05-24
 **Update this before context compaction or at the end of meaningful sessions.**
 
 Read this after `AGENTS.md` when working on `experiments/core-data-rest-layer/`.
@@ -22,8 +22,8 @@ Implemented package:
 - `Sources/CoreDataRESTLayer/RemoteModels.swift` — JSON domain models and shared JSON coding.
 - `Sources/CoreDataRESTLayer/RESTClient.swift` — `URLSession` client for `GET /projects`, paginated `GET /projects/{projectID}/tasks`, and `PATCH /tasks/{taskID}`.
 - `Sources/CoreDataRESTLayer/VersionMapping.swift` — explicit API version / local model version compatibility skeleton.
-- `Sources/CoreDataRESTLayer/CoreDataStack.swift` — programmatic Core Data model with `CDProject` / `CDTask`, relationship, version, dirty, and conflict metadata.
-- `Sources/CoreDataRESTLayer/RESTIncrementalStore.swift` — `NSIncrementalStore` that maps Core Data fetches, relationship faults, and task saves to REST calls.
+- `Sources/CoreDataRESTLayer/CoreDataStack.swift` — programmatic Core Data model with `CDProject` / `CDTask`, relationship, version, dirty, conflict metadata, and `CDRemoteRelationshipState`.
+- `Sources/CoreDataRESTLayer/RESTIncrementalStore.swift` — `NSIncrementalStore` that maps Core Data fetches, relationship faults, task saves, and relationship sync-state synthesis to REST calls.
 - `Sources/CoreDataRESTLayer/ProjectionSync.swift` — earlier pull projection path; keep as historical/baseline code, not the target architecture.
 - `Sources/CoreDataRESTLayerTestServer/EmbeddedRESTServer.swift` — dependency-free `Network.framework` local HTTP server bound to `127.0.0.1:0`, with pagination and latency hooks.
 - `Tests/CoreDataRESTLayerTests/CoreDataRESTLayerTests.swift` — acceptance tests for incremental-store fetch/fault/save, conflict/error behavior, background context helper, plus earlier projection, pagination, latency, and version-header tests.
@@ -37,6 +37,7 @@ Current docs:
 - `docs/solutions/2026-05-23-pagination-latency-versioning-findings.md` records pagination/latency/versioning findings.
 - `docs/solutions/2026-05-23-rest-incremental-store-spike.md` records the custom-store pivot and current findings.
 - `docs/solutions/2026-05-23-rest-store-ergonomics-and-error-policy.md` records error/execution/completeness recommendations.
+- `docs/solutions/2026-05-24-relationship-sync-state-findings.md` records managed relationship-state findings.
 
 ## Working Direction
 
@@ -60,10 +61,11 @@ Done:
 - `004` — `todos/004-done-p2-add-pagination-and-latency-cases.md`
 - `005` — `todos/005-done-p1-harden-rest-incremental-store.md`
 - `006` — `todos/006-done-p1-rest-store-ergonomics-and-errors.md`
+- `007` — `todos/007-done-p2-add-relationship-sync-state-entity.md`
 
 Ready:
 
-- `007` — `todos/007-ready-p2-add-relationship-sync-state-entity.md`
+- `008` — `todos/008-ready-p2-partial-object-field-loading.md`
 
 ## Open Questions
 
@@ -80,8 +82,8 @@ Still open:
 
 - Should loading/error/conflict/completeness state stay on managed objects, move to separate sync records, or live in caller state as scenarios grow?
 - Should local edits remain dirty flags on managed objects, or become separate pending-change entities / child-context units of work?
-- Does adding managed relationship sync-state make REST-backed faults ergonomic, or does it just rebuild a sync layer under the store?
 - Can synchronous store methods be made cancellable enough for real app use?
+- Can partial object/field loading be represented without surprising property access semantics?
 
 ## Verification
 
@@ -92,8 +94,8 @@ cd experiments/core-data-rest-layer
 swift test
 ```
 
-Last verified 2026-05-23: 17 XCTest tests passed.
+Last verified 2026-05-24: 19 XCTest tests passed.
 
 ## Next Action
 
-Pick up `todos/007-ready-p2-add-relationship-sync-state-entity.md`: model per-relationship pagination/completeness state inside the custom-store path.
+Pick up `todos/008-ready-p2-partial-object-field-loading.md`: test partial field loading semantics in the custom-store path.

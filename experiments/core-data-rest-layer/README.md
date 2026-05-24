@@ -119,6 +119,7 @@ The test harness starts an embedded REST server on `127.0.0.1:0`. The current me
 - Save conflicts can mark the dirty object and throw `RESTIncrementalStoreError.conflict(remote:)`.
 - Non-conflict HTTP failures from fetch/fault/save paths throw `RESTIncrementalStoreError.httpStatus`, which also bridges to a stable `NSError` domain/code/userInfo.
 - Core Data's store API is synchronous, so REST calls inside an incremental store are blocking unless wrapped by a higher-level execution policy; use private-queue contexts for app-facing operations.
+- `CDRemoteRelationshipState` now records relationship completeness/error metadata when paginated REST relationship faults complete or fail.
 - Pagination style is part of the remote contract and leaks into sync/completeness semantics; it should not be hidden as a transparent relationship fault.
 - Keep API version, local Core Data model version, and per-resource optimistic concurrency version separate.
 
