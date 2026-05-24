@@ -1,7 +1,7 @@
 # Skunkworks Session Handoff
 
 **URN:** `skunkworks::local::docs::handoff::019e4c5b-d963-7fda-96c7-1f399cdad092`  
-**Last updated:** 2026-05-22  
+**Last updated:** 2026-05-24
 **Update this before context compaction or at the end of meaningful sessions.**
 
 Read this after `AGENTS.md` at the start of every Skunkworks session.
