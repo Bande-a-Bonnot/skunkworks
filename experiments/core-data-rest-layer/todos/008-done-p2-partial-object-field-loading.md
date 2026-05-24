@@ -1,5 +1,5 @@
 ---
-status: ready
+status: done
 priority: p2
 issue_id: "008"
 tags: [core-data, custom-store, partial-loading]

@@ -15,6 +15,8 @@ public class CDTask: NSManagedObject {
     @NSManaged public var id: UUID
     @NSManaged public var title: String
     @NSManaged public var status: String
+    @NSManaged public var notes: String?
+    @NSManaged public var loadedFields: String
     @NSManaged public var updatedAt: Date
     @NSManaged public var version: Int64
     @NSManaged public var isDirty: Bool
@@ -91,6 +93,8 @@ public final class CoreDataStack {
         let taskId = attribute("id", .UUIDAttributeType, optional: false)
         let taskTitle = attribute("title", .stringAttributeType, optional: false)
         let taskStatus = attribute("status", .stringAttributeType, optional: false)
+        let taskNotes = attribute("notes", .stringAttributeType, optional: true)
+        let taskLoadedFields = attribute("loadedFields", .stringAttributeType, optional: false, defaultValue: "summary")
         let taskUpdatedAt = attribute("updatedAt", .dateAttributeType, optional: false)
         let taskVersion = attribute("version", .integer64AttributeType, optional: false, defaultValue: 0)
         let taskIsDirty = attribute("isDirty", .booleanAttributeType, optional: false, defaultValue: false)
@@ -137,6 +141,8 @@ public final class CoreDataStack {
             taskId,
             taskTitle,
             taskStatus,
+            taskNotes,
+            taskLoadedFields,
             taskUpdatedAt,
             taskVersion,
             taskIsDirty,
@@ -194,6 +200,14 @@ public extension CDProject {
 }
 
 public extension CDTask {
+    var loadedFieldNames: Set<String> {
+        Set(loadedFields.split(separator: ",").map(String.init))
+    }
+
+    func hasLoadedField(_ field: String) -> Bool {
+        loadedFieldNames.contains(field)
+    }
+
     static func fetchRequest() -> NSFetchRequest<CDTask> {
         NSFetchRequest<CDTask>(entityName: "CDTask")
     }

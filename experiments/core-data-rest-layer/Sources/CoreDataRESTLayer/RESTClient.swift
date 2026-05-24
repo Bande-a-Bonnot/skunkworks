@@ -54,6 +54,10 @@ public final class RESTClient {
         )
     }
 
+    public func fetchTask(id: UUID) async throws -> RemoteTask {
+        try await send(path: "/tasks/\(id.uuidString)", method: "GET", responseType: RemoteTask.self)
+    }
+
     public func fetchTasks(projectID: UUID, pagination: TaskPaginationStrategy) async throws -> [RemoteTask] {
         switch pagination {
         case .none:

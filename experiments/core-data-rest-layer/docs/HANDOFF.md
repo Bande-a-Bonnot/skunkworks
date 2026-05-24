@@ -19,14 +19,14 @@ A real custom-store spike exists and passes tests. The earlier projection-sync s
 Implemented package:
 
 - `Package.swift`
-- `Sources/CoreDataRESTLayer/RemoteModels.swift` — JSON domain models and shared JSON coding.
-- `Sources/CoreDataRESTLayer/RESTClient.swift` — `URLSession` client for `GET /projects`, paginated `GET /projects/{projectID}/tasks`, and `PATCH /tasks/{taskID}`.
+- `Sources/CoreDataRESTLayer/RemoteModels.swift` — JSON domain models and shared JSON coding, including summary-vs-detail task decoding.
+- `Sources/CoreDataRESTLayer/RESTClient.swift` — `URLSession` client for `GET /projects`, paginated `GET /projects/{projectID}/tasks`, `GET /tasks/{taskID}`, and `PATCH /tasks/{taskID}`.
 - `Sources/CoreDataRESTLayer/VersionMapping.swift` — explicit API version / local model version compatibility skeleton.
-- `Sources/CoreDataRESTLayer/CoreDataStack.swift` — programmatic Core Data model with `CDProject` / `CDTask`, relationship, version, dirty, conflict metadata, and `CDRemoteRelationshipState`.
-- `Sources/CoreDataRESTLayer/RESTIncrementalStore.swift` — `NSIncrementalStore` that maps Core Data fetches, relationship faults, task saves, and relationship sync-state synthesis to REST calls.
+- `Sources/CoreDataRESTLayer/CoreDataStack.swift` — programmatic Core Data model with `CDProject` / `CDTask`, relationship, version, dirty, conflict metadata, loaded field metadata, and `CDRemoteRelationshipState`.
+- `Sources/CoreDataRESTLayer/RESTIncrementalStore.swift` — `NSIncrementalStore` that maps Core Data fetches, relationship faults, explicit task detail refreshes, task saves, and relationship sync-state synthesis to REST calls.
 - `Sources/CoreDataRESTLayer/ProjectionSync.swift` — earlier pull projection path; keep as historical/baseline code, not the target architecture.
-- `Sources/CoreDataRESTLayerTestServer/EmbeddedRESTServer.swift` — dependency-free `Network.framework` local HTTP server bound to `127.0.0.1:0`, with pagination and latency hooks.
-- `Tests/CoreDataRESTLayerTests/CoreDataRESTLayerTests.swift` — acceptance tests for incremental-store fetch/fault/save, conflict/error behavior, background context helper, plus earlier projection, pagination, latency, and version-header tests.
+- `Sources/CoreDataRESTLayerTestServer/EmbeddedRESTServer.swift` — dependency-free `Network.framework` local HTTP server bound to `127.0.0.1:0`, with pagination, latency hooks, summary task lists, and task detail routes.
+- `Tests/CoreDataRESTLayerTests/CoreDataRESTLayerTests.swift` — acceptance tests for incremental-store fetch/fault/save, partial detail loading, conflict/error behavior, background context helper, plus earlier projection, pagination, latency, and version-header tests.
 
 Current docs:
 
@@ -38,6 +38,7 @@ Current docs:
 - `docs/solutions/2026-05-23-rest-incremental-store-spike.md` records the custom-store pivot and current findings.
 - `docs/solutions/2026-05-23-rest-store-ergonomics-and-error-policy.md` records error/execution/completeness recommendations.
 - `docs/solutions/2026-05-24-relationship-sync-state-findings.md` records managed relationship-state findings.
+- `docs/solutions/2026-05-24-partial-field-loading-findings.md` records partial field/detail loading findings.
 
 ## Working Direction
 
@@ -62,10 +63,9 @@ Done:
 - `005` — `todos/005-done-p1-harden-rest-incremental-store.md`
 - `006` — `todos/006-done-p1-rest-store-ergonomics-and-errors.md`
 - `007` — `todos/007-done-p2-add-relationship-sync-state-entity.md`
+- `008` — `todos/008-done-p2-partial-object-field-loading.md`
 
-Ready:
-
-- `008` — `todos/008-ready-p2-partial-object-field-loading.md`
+Ready: none.
 
 ## Open Questions
 
@@ -83,7 +83,7 @@ Still open:
 - Should loading/error/conflict/completeness state stay on managed objects, move to separate sync records, or live in caller state as scenarios grow?
 - Should local edits remain dirty flags on managed objects, or become separate pending-change entities / child-context units of work?
 - Can synchronous store methods be made cancellable enough for real app use?
-- Can partial object/field loading be represented without surprising property access semantics?
+- How far should explicit partial-field metadata go before it needs a separate sync/detail-state entity instead of `CDTask.loadedFields`?
 
 ## Verification
 
@@ -94,8 +94,12 @@ cd experiments/core-data-rest-layer
 swift test
 ```
 
-Last verified 2026-05-24: 19 XCTest tests passed.
+Last verified 2026-05-24: 20 XCTest tests passed.
 
 ## Next Action
 
-Pick up `todos/008-ready-p2-partial-object-field-loading.md`: test partial field loading semantics in the custom-store path.
+No ready local todo remains. Good next options:
+
+1. Write a synthesis note on which Core Data features remain pleasant over REST.
+2. Open a new todo for pending-change entities / child-context unit-of-work semantics.
+3. Open a new todo for cancellation/timeout behavior around synchronous `NSIncrementalStore` methods.

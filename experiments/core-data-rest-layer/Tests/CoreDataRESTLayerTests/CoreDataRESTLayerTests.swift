@@ -36,6 +36,38 @@ final class CoreDataRESTLayerTests: XCTestCase {
         XCTAssertEqual(server.requestCount(forPath: "/projects/\(fixture.project.id.uuidString)/tasks"), 3)
     }
 
+    func testRESTIncrementalStoreKeepsPartialTaskDetailsExplicitUntilRefresh() throws {
+        var fixture = Fixture.make()
+        fixture.tasks[0].notes = nil
+        fixture.tasks[1].notes = ""
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL)
+        let project = try XCTUnwrap(stack.context.fetch(CDProject.fetchRequestSortedByName()).first)
+        let tasks = project.tasks.sorted { $0.title < $1.title }
+        let nullNotesTask = try XCTUnwrap(tasks.first { $0.id == fixture.firstTaskID })
+        let emptyNotesTask = try XCTUnwrap(tasks.first { $0.id != fixture.firstTaskID })
+
+        XCTAssertNil(nullNotesTask.notes)
+        XCTAssertFalse(nullNotesTask.hasLoadedField("notes"))
+        XCTAssertEqual(nullNotesTask.loadedFields, "summary")
+        XCTAssertNil(emptyNotesTask.notes)
+        XCTAssertFalse(emptyNotesTask.hasLoadedField("notes"))
+        XCTAssertEqual(server.requestCount(forPath: "/tasks/\(fixture.firstTaskID.uuidString)"), 0)
+
+        try stack.loadTaskDetails(for: nullNotesTask)
+        XCTAssertNil(nullNotesTask.notes)
+        XCTAssertTrue(nullNotesTask.hasLoadedField("notes"))
+        XCTAssertEqual(nullNotesTask.loadedFields, "summary,notes")
+        XCTAssertEqual(server.requestCount(forPath: "/tasks/\(fixture.firstTaskID.uuidString)"), 1)
+
+        try stack.loadTaskDetails(for: emptyNotesTask)
+        XCTAssertEqual(emptyNotesTask.notes, "")
+        XCTAssertTrue(emptyNotesTask.hasLoadedField("notes"))
+    }
+
     func testRESTIncrementalStoreRelationshipFaultWritesCompletenessState() throws {
         let fixture = Fixture.make(taskCount: 5)
         let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)

@@ -47,6 +47,8 @@ public final class ProjectionSync {
                     let localTask = try self.fetchOrInsertTask(id: task.id)
                     localTask.title = task.title
                     localTask.status = task.status
+                    localTask.notes = task.notes
+                    localTask.loadedFields = task.loadedFieldsDescription
                     localTask.updatedAt = task.updatedAt
                     localTask.version = Int64(task.version)
                     localTask.project = localProject
@@ -143,6 +145,12 @@ public final class ProjectionSync {
         let task = CDTask(context: context)
         task.id = id
         return task
+    }
+}
+
+private extension RemoteTask {
+    var loadedFieldsDescription: String {
+        isDetailLoaded ? "summary,notes" : "summary"
     }
 }
 

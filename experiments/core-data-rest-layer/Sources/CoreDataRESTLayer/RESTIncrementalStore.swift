@@ -102,6 +102,14 @@ public final class RESTCoreDataStack {
         context.persistentStoreCoordinator = coordinator
         return context
     }
+
+    public func loadTaskDetails(for task: CDTask) throws {
+        guard let store = coordinator.persistentStores.first as? RESTIncrementalStore else {
+            throw RESTIncrementalStoreError.unsupportedEntity(task.entity.name)
+        }
+        try store.loadTaskDetails(for: task.objectID)
+        task.managedObjectContext?.refresh(task, mergeChanges: false)
+    }
 }
 
 @objc(RESTIncrementalStore)
@@ -222,13 +230,18 @@ public final class RESTIncrementalStore: NSIncrementalStore {
                 "id": task.id,
                 "title": task.title,
                 "status": task.status,
+                "loadedFields": task.loadedFieldsDescription,
                 "updatedAt": task.updatedAt,
                 "version": Int64(task.version),
                 "isDirty": false
             ]
+            var loadedValues = values
+            if task.isDetailLoaded, let notes = task.notes {
+                loadedValues["notes"] = notes
+            }
             return NSIncrementalStoreNode(
                 objectID: objectID,
-                withValues: values,
+                withValues: loadedValues,
                 version: UInt64(task.version)
             )
         case "CDRemoteRelationshipState":
@@ -283,6 +296,13 @@ public final class RESTIncrementalStore: NSIncrementalStore {
         default:
             throw RESTIncrementalStoreError.unsupportedRelationship(relationship.name)
         }
+    }
+
+    public func loadTaskDetails(for objectID: NSManagedObjectID) throws {
+        guard objectID.entity.name == "CDTask" else {
+            throw RESTIncrementalStoreError.unsupportedEntity(objectID.entity.name)
+        }
+        _ = try fetchRemoteTaskDetail(id: try uuidReference(from: objectID))
     }
 
     public override func obtainPermanentIDs(for array: [NSManagedObject]) throws -> [NSManagedObjectID] {
@@ -350,6 +370,14 @@ public final class RESTIncrementalStore: NSIncrementalStore {
             }
         }
         return tasks
+    }
+
+    private func fetchRemoteTaskDetail(id: UUID) throws -> RemoteTask {
+        let task = try requireClient().fetchTask(id: id)
+        lock.withLock {
+            taskCache[task.id] = task
+        }
+        return task
     }
 
     private func fetchRemoteTasksForAllProjects() throws -> [RemoteTask] {
@@ -482,6 +510,12 @@ public final class RESTIncrementalStore: NSIncrementalStore {
     }
 }
 
+private extension RemoteTask {
+    var loadedFieldsDescription: String {
+        isDetailLoaded ? "summary,notes" : "summary"
+    }
+}
+
 private struct RemoteRelationshipStateSnapshot {
     var id: String
     var ownerEntityName: String
@@ -530,6 +564,10 @@ private final class BlockingRESTClient {
 
     func fetchProjects() throws -> [RemoteProject] {
         try send(path: "/projects", responseType: [RemoteProject].self)
+    }
+
+    func fetchTask(id: UUID) throws -> RemoteTask {
+        try send(path: "/tasks/\(id.uuidString)", responseType: RemoteTask.self)
     }
 
     func fetchTasks(projectID: UUID, pagination: TaskPaginationStrategy = .none) throws -> [RemoteTask] {

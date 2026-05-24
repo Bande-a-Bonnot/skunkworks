@@ -93,7 +93,7 @@ Plan: `docs/plans/2026-05-22-core-data-rest-layer-first-spike-plan.md`.
 - `docs/HANDOFF.md` — current state and exact next action.
 - `docs/initial-questions.md` — question bank.
 - `Package.swift` — Swift package harness.
-- `Sources/CoreDataRESTLayer/` — REST models/client, API/model version mapping, programmatic Core Data model, projection sync, and `RESTIncrementalStore`.
+- `Sources/CoreDataRESTLayer/` — REST models/client, API/model version mapping, programmatic Core Data model, projection sync, and `RESTIncrementalStore` with explicit task-detail loading.
 - `Sources/CoreDataRESTLayerTestServer/` — embedded deterministic HTTP server for tests.
 - `Tests/CoreDataRESTLayerTests/` — acceptance tests for sync/edit/push/conflict flows.
 - `todos/` — local task breakdown.
@@ -121,6 +121,8 @@ The test harness starts an embedded REST server on `127.0.0.1:0`. The current me
 - Core Data's store API is synchronous, so REST calls inside an incremental store are blocking unless wrapped by a higher-level execution policy; use private-queue contexts for app-facing operations.
 - `CDRemoteRelationshipState` now records relationship completeness/error metadata when paginated REST relationship faults complete or fail.
 - Pagination style is part of the remote contract and leaks into sync/completeness semantics; it should not be hidden as a transparent relationship fault.
+- Partial scalar fields need explicit completeness metadata: `CDTask.loadedFields == "summary"` means nullable detail fields such as `notes` are not authoritative yet.
+- Detail-only scalar fields should load through explicit refresh APIs (`RESTCoreDataStack.loadTaskDetails(for:)`), not hidden property access that performs synchronous network work.
 - Keep API version, local Core Data model version, and per-resource optimistic concurrency version separate.
 
 ## Next Ideas
@@ -131,6 +133,7 @@ The test harness starts an embedded REST server on `127.0.0.1:0`. The current me
 - [x] Implement embedded local REST server.
 - [x] Simulate stale writes/conflicts.
 - [x] Later: simulate latency and pagination.
+- [x] Explore partial object/field loading semantics in the custom-store path.
 - [ ] Write down which Core Data features remain pleasant over REST in more detail.
 
 ## Cleanup / Graduation

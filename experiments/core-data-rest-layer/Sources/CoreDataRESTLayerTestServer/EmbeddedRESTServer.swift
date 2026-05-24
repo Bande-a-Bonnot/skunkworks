@@ -228,6 +228,7 @@ public final class EmbeddedRESTServer {
                 tasks.values
                     .filter { $0.projectId == projectID }
                     .sorted { $0.title < $1.title }
+                    .map { $0.summaryOnly() }
             }
 
             if let limitText = request.queryItems["limit"],
@@ -275,6 +276,19 @@ public final class EmbeddedRESTServer {
                 )
             }
 
+            return try .json(status: 200, body: payload, encoder: encoder)
+        }
+
+        if request.method == "GET",
+           path.count == 2,
+           path[0] == "tasks",
+           let taskID = UUID(uuidString: path[1]) {
+            let payload = try stateQueue.sync {
+                guard let task = tasks[taskID] else {
+                    throw EmbeddedRESTServerError.unknownTask(taskID)
+                }
+                return task
+            }
             return try .json(status: 200, body: payload, encoder: encoder)
         }
 
