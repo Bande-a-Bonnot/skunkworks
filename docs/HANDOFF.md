@@ -1,7 +1,7 @@
 # Skunkworks Session Handoff
 
 **URN:** `skunkworks::local::docs::handoff::019e4c5b-d963-7fda-96c7-1f399cdad092`  
-**Last updated:** 2026-05-24
+**Last updated:** 2026-05-25
 **Update this before context compaction or at the end of meaningful sessions.**
 
 Read this after `AGENTS.md` at the start of every Skunkworks session.
@@ -49,7 +49,7 @@ Existing root `nohup.out` was present from before setup and is ignored. Do not d
 
 Active / next up:
 
-- `experiments/core-data-rest-layer/` — read `experiments/core-data-rest-layer/docs/HANDOFF.md`.
+- `experiments/core-data-rest-layer/` — read `experiments/core-data-rest-layer/docs/HANDOFF.md`. Local todo `009` is ready for pending-change semantics.
 
 Parked / optional follow-up:
 
@@ -78,7 +78,7 @@ Root todos track repo-level or cross-experiment work only. Experiment-specific w
 
 ## Likely Next Actions
 
-1. Continue `core-data-rest-layer` by choosing/opening the next local todo; partial object/field loading and the feature synthesis note are done.
+1. Continue `core-data-rest-layer` with local todo `009`: pending-change semantics.
 2. Keep root handoff minimal; update experiment-local handoff with implementation details.
 3. Decide later whether `experiments/README.md` should stay a manual catalog, become generated, or both.
 

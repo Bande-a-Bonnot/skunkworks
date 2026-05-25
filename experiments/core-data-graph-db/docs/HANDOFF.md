@@ -1,7 +1,7 @@
 # Core Data Graph Database Handoff
 
 **URN:** `skunkworks::local::experiment::core-data-graph-db::handoff::019e4c87-dd7e-75ef-a7e6-feb136eb2d9c`  
-**Last updated:** 2026-05-22  
+**Last updated:** 2026-05-25  
 **Update this before context compaction or at the end of meaningful sessions.**
 
 Read this after `AGENTS.md` when working on `experiments/core-data-graph-db/`.
@@ -45,6 +45,7 @@ Key files:
 - `docs/solutions/2026-05-21-first-spike-benchmark-findings.md`
 - `docs/solutions/2026-05-22-sqlite-vs-in-memory-benchmark-findings.md`
 - `docs/solutions/2026-05-22-relationship-prefetch-benchmark-findings.md`
+- `docs/solutions/2026-05-25-implementation-review.md` — Codex 5.5 xhigh read-only review of implementation against the initial brief/goals.
 
 ## Working Direction
 
@@ -110,4 +111,4 @@ Release benchmark snapshot:
 
 ## Next Action
 
-Recommended next step: switch to `core-data-rest-layer` and write its first spike plan. The SPM library API idea is documented and intentionally parked in `docs/plans/2026-05-22-experimental-spm-library-api-plan.md`.
+Experiment remains parked. The 2026-05-25 implementation review recommends keeping it parked unless productizing; if resumed, prioritize repeated benchmark runs, random/dense fixtures, ID constraints/indexes, and deterministic/validated Dijkstra behavior.

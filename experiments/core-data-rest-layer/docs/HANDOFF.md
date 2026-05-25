@@ -1,7 +1,7 @@
 # Core Data REST Layer Handoff
 
 **URN:** `skunkworks::local::experiment::core-data-rest-layer::handoff::019e4c87-dd7e-708c-be24-fda71b3451b3`  
-**Last updated:** 2026-05-24
+**Last updated:** 2026-05-25
 **Update this before context compaction or at the end of meaningful sessions.**
 
 Read this after `AGENTS.md` when working on `experiments/core-data-rest-layer/`.
@@ -40,6 +40,8 @@ Current docs:
 - `docs/solutions/2026-05-24-relationship-sync-state-findings.md` records managed relationship-state findings.
 - `docs/solutions/2026-05-24-partial-field-loading-findings.md` records partial field/detail loading findings.
 - `docs/solutions/2026-05-24-core-data-over-rest-synthesis.md` synthesizes which Core Data features remain pleasant over REST and where REST semantics must stay explicit.
+- `docs/solutions/2026-05-25-implementation-review.md` records a Codex 5.5 xhigh read-only review of implementation against the initial brief/goals.
+- `docs/plans/2026-05-25-pending-change-semantics-plan.md` records the Codex 5.5 xhigh plan for the next pending-change semantics spike.
 
 ## Working Direction
 
@@ -66,7 +68,9 @@ Done:
 - `007` — `todos/007-done-p2-add-relationship-sync-state-entity.md`
 - `008` — `todos/008-done-p2-partial-object-field-loading.md`
 
-Ready: none.
+Ready:
+
+- `009` — `todos/009-ready-p2-pending-change-semantics.md`
 
 ## Open Questions
 
@@ -99,8 +103,6 @@ Last verified 2026-05-24: 20 XCTest tests passed.
 
 ## Next Action
 
-No ready local todo remains. Good next options:
+Pick up `todos/009-ready-p2-pending-change-semantics.md`: implement the narrow pending-change spike from `docs/plans/2026-05-25-pending-change-semantics-plan.md`.
 
-1. Open a new todo for pending-change entities / child-context unit-of-work semantics.
-2. Open a new todo for cancellation/timeout behavior around synchronous `NSIncrementalStore` methods.
-3. Decide whether to graduate this into a small library prototype or archive it as findings.
+After that, good next options are cancellation/timeout behavior around synchronous `NSIncrementalStore` methods, or a graduate/archive decision.
