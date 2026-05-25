@@ -234,6 +234,96 @@ final class CoreDataRESTLayerTests: XCTestCase {
         }
     }
 
+    func testRESTIncrementalStoreFetchPredicateFailsFast() throws {
+        let fixture = Fixture.make()
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL)
+        let request = CDTask.fetchRequest()
+        request.predicate = NSPredicate(format: "status == %@", "open")
+
+        XCTAssertThrowsError(try stack.context.fetch(request)) { error in
+            assertUnsupportedFetch(error, entity: "CDTask", reasonContains: "Predicates")
+        }
+        XCTAssertEqual(server.requestCount(forPath: "/projects"), 0)
+    }
+
+    func testRESTIncrementalStoreFetchLimitFailsFast() throws {
+        let fixture = Fixture.make(taskCount: 5)
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL)
+        let request = CDTask.fetchRequestSortedByTitle()
+        request.fetchLimit = 1
+
+        XCTAssertThrowsError(try stack.context.fetch(request)) { error in
+            assertUnsupportedFetch(error, entity: "CDTask", reasonContains: "fetchLimit")
+        }
+        XCTAssertEqual(server.requestCount(forPath: "/projects"), 0)
+    }
+
+    func testRESTIncrementalStoreCountResultFetchFailsFast() throws {
+        let fixture = Fixture.make()
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL)
+        let request = NSFetchRequest<NSFetchRequestResult>()
+        request.entity = stack.coordinator.managedObjectModel.entitiesByName["CDProject"]
+        request.resultType = .countResultType
+        let store = try XCTUnwrap(stack.coordinator.persistentStores.first as? RESTIncrementalStore)
+
+        XCTAssertThrowsError(try store.execute(request, with: stack.context)) { error in
+            assertUnsupportedFetch(error, entity: "CDProject", reasonContains: "managed-object")
+        }
+    }
+
+    func testRESTIncrementalStoreInsertedDomainObjectSaveFailsFast() throws {
+        let fixture = Fixture.make()
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL)
+        let inserted = NSEntityDescription.insertNewObject(forEntityName: "CDProject", into: stack.context) as! CDProject
+        inserted.id = UUID()
+        inserted.name = "Unsupported local create"
+        inserted.updatedAt = Fixture.baseDate
+        inserted.version = 1
+
+        XCTAssertThrowsError(try stack.context.save()) { error in
+            assertUnsupportedSave(error, entity: "CDProject", operation: "insert")
+        }
+        XCTAssertEqual(server.requestCount(forPath: "/projects"), 0)
+    }
+
+    func testRESTIncrementalStoreDeletedTaskGraphSaveFailsFast() throws {
+        let fixture = Fixture.make()
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL)
+        let project = try XCTUnwrap(stack.context.fetch(CDProject.fetchRequestSortedByName()).first)
+        let task = try XCTUnwrap(project.tasks.first { $0.id == fixture.firstTaskID })
+
+        stack.context.delete(task)
+
+        XCTAssertThrowsError(try stack.context.save()) { error in
+            guard case RESTIncrementalStoreError.unsupportedSaveShape(let entity, let operation) = error else {
+                return XCTFail("Expected RESTIncrementalStoreError.unsupportedSaveShape, got \(error)")
+            }
+            XCTAssertTrue(["CDTask", "CDProject"].contains(entity))
+            XCTAssertTrue(["delete", "update"].contains(operation))
+        }
+        XCTAssertEqual(server.requestCount(forPath: "/tasks/\(fixture.firstTaskID.uuidString)"), 0)
+    }
+
     func testRESTIncrementalStoreBackgroundContextCanRunBlockingRESTWorkOffMainContext() throws {
         let fixture = Fixture.make()
         let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
@@ -588,6 +678,46 @@ final class CoreDataRESTLayerTests: XCTestCase {
         XCTAssertTrue(conflictedTask.isDirty)
         XCTAssertEqual(conflictedTask.conflictState, "remoteVersion=2")
         XCTAssertTrue(conflictedTask.lastSyncError?.contains("Remote won first") == true)
+    }
+
+    private func assertUnsupportedFetch(
+        _ error: Error,
+        entity: String,
+        reasonContains expectedReasonFragment: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        guard case RESTIncrementalStoreError.unsupportedFetchShape(let actualEntity, let reason) = error else {
+            return XCTFail("Expected RESTIncrementalStoreError.unsupportedFetchShape, got \(error)", file: file, line: line)
+        }
+        XCTAssertEqual(actualEntity, entity, file: file, line: line)
+        XCTAssertTrue(reason.contains(expectedReasonFragment), file: file, line: line)
+
+        let nsError = error as NSError
+        XCTAssertEqual(nsError.domain, RESTIncrementalStoreError.errorDomain, file: file, line: line)
+        XCTAssertEqual(nsError.code, RESTIncrementalStoreError.unsupportedFetchShape(entity: entity, reason: reason).errorCode, file: file, line: line)
+        XCTAssertEqual(nsError.userInfo["EntityName"] as? String, entity, file: file, line: line)
+        XCTAssertTrue((nsError.userInfo["UnsupportedReason"] as? String)?.contains(expectedReasonFragment) == true, file: file, line: line)
+    }
+
+    private func assertUnsupportedSave(
+        _ error: Error,
+        entity: String,
+        operation: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        guard case RESTIncrementalStoreError.unsupportedSaveShape(let actualEntity, let actualOperation) = error else {
+            return XCTFail("Expected RESTIncrementalStoreError.unsupportedSaveShape, got \(error)", file: file, line: line)
+        }
+        XCTAssertEqual(actualEntity, entity, file: file, line: line)
+        XCTAssertEqual(actualOperation, operation, file: file, line: line)
+
+        let nsError = error as NSError
+        XCTAssertEqual(nsError.domain, RESTIncrementalStoreError.errorDomain, file: file, line: line)
+        XCTAssertEqual(nsError.code, RESTIncrementalStoreError.unsupportedSaveShape(entity: entity, operation: operation).errorCode, file: file, line: line)
+        XCTAssertEqual(nsError.userInfo["EntityName"] as? String, entity, file: file, line: line)
+        XCTAssertEqual(nsError.userInfo["UnsupportedSaveOperation"] as? String, operation, file: file, line: line)
     }
 
     private func assertHTTPStatus(

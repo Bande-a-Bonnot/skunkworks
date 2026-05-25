@@ -7,6 +7,8 @@ public enum RESTIncrementalStoreError: Error, CustomStringConvertible, CustomNSE
     case unsupportedRequest(NSPersistentStoreRequestType)
     case unsupportedEntity(String?)
     case unsupportedRelationship(String)
+    case unsupportedFetchShape(entity: String?, reason: String)
+    case unsupportedSaveShape(entity: String?, operation: String)
     case invalidResponse
     case httpStatus(Int, String)
     case conflict(remote: RemoteTask)
@@ -22,9 +24,11 @@ public enum RESTIncrementalStoreError: Error, CustomStringConvertible, CustomNSE
         case .unsupportedRequest: return 3
         case .unsupportedEntity: return 4
         case .unsupportedRelationship: return 5
-        case .invalidResponse: return 6
-        case .httpStatus: return 7
-        case .conflict: return 8
+        case .unsupportedFetchShape: return 6
+        case .unsupportedSaveShape: return 7
+        case .invalidResponse: return 8
+        case .httpStatus: return 9
+        case .conflict: return 10
         }
     }
 
@@ -49,6 +53,16 @@ public enum RESTIncrementalStoreError: Error, CustomStringConvertible, CustomNSE
             }
         case let .unsupportedRelationship(relationship):
             userInfo["RelationshipName"] = relationship
+        case let .unsupportedFetchShape(entity, reason):
+            if let entity {
+                userInfo["EntityName"] = entity
+            }
+            userInfo["UnsupportedReason"] = reason
+        case let .unsupportedSaveShape(entity, operation):
+            if let entity {
+                userInfo["EntityName"] = entity
+            }
+            userInfo["UnsupportedSaveOperation"] = operation
         case .missingBaseURL, .invalidResponse:
             break
         }
@@ -67,6 +81,10 @@ public enum RESTIncrementalStoreError: Error, CustomStringConvertible, CustomNSE
             return "Unsupported entity: \(entity ?? "nil")"
         case let .unsupportedRelationship(name):
             return "Unsupported relationship: \(name)"
+        case let .unsupportedFetchShape(entity, reason):
+            return "Unsupported fetch shape for \(entity ?? "nil"): \(reason)"
+        case let .unsupportedSaveShape(entity, operation):
+            return "Unsupported save shape for \(entity ?? "nil") \(operation)"
         case .invalidResponse:
             return "Invalid HTTP response"
         case let .httpStatus(status, body):
@@ -237,25 +255,60 @@ public final class RESTIncrementalStore: NSIncrementalStore {
             throw RESTIncrementalStoreError.invalidResponse
         }
 
+        try validateSupportedFetchShape(fetchRequest)
+
         switch fetchRequest.entity?.name {
         case "CDProject":
-            let projects = try fetchRemoteProjects()
+            let projects = try sorted(fetchRemoteProjects(), using: fetchRequest.sortDescriptors) { project, key in
+                switch key {
+                case "name": return project.name
+                case "updatedAt": return project.updatedAt
+                case "version": return project.version
+                case "id": return project.id.uuidString
+                default: return nil
+                }
+            }
             return projects.map { project in
                 context.object(with: newObjectID(for: entity(named: "CDProject"), referenceObject: project.id.uuidString))
             }
         case "CDTask":
-            let tasks = try fetchRemoteTasksForAllProjects()
+            let tasks = try sorted(fetchRemoteTasksForAllProjects(), using: fetchRequest.sortDescriptors) { task, key in
+                switch key {
+                case "title": return task.title
+                case "status": return task.status
+                case "updatedAt": return task.updatedAt
+                case "version": return task.version
+                case "id": return task.id.uuidString
+                default: return nil
+                }
+            }
             return tasks.map { task in
                 context.object(with: newObjectID(for: entity(named: "CDTask"), referenceObject: task.id.uuidString))
             }
         case "CDPendingTaskChange":
-            let changes = lock.withLock { Array(pendingTaskChangeCache.values) }
-                .sorted { $0.updatedAt < $1.updatedAt }
+            let changes = try sorted(lock.withLock { Array(pendingTaskChangeCache.values) }, using: fetchRequest.sortDescriptors) { change, key in
+                switch key {
+                case "updatedAt": return change.updatedAt
+                case "createdAt": return change.createdAt
+                case "taskID": return change.taskID.uuidString
+                case "state": return change.state
+                case "id": return change.id.uuidString
+                default: return nil
+                }
+            }
             return changes.map { change in
                 context.object(with: newObjectID(for: entity(named: "CDPendingTaskChange"), referenceObject: change.id.uuidString))
             }
         case "CDRemoteRelationshipState":
-            let states = lock.withLock { Array(relationshipStateCache.values) }
+            let states = try sorted(lock.withLock { Array(relationshipStateCache.values) }, using: fetchRequest.sortDescriptors) { state, key in
+                switch key {
+                case "id": return state.id
+                case "ownerEntityName": return state.ownerEntityName
+                case "ownerRemoteID": return state.ownerRemoteID
+                case "relationshipName": return state.relationshipName
+                default: return nil
+                }
+            }
             return states.map { state in
                 context.object(with: newObjectID(for: entity(named: "CDRemoteRelationshipState"), referenceObject: state.id))
             }
@@ -484,6 +537,8 @@ public final class RESTIncrementalStore: NSIncrementalStore {
     }
 
     private func executeSave(_ saveRequest: NSSaveChangesRequest) throws {
+        try validateSupportedSaveShape(saveRequest)
+
         for object in saveRequest.insertedObjects ?? [] where object.entity.name == "CDPendingTaskChange" {
             try upsertPendingTaskChange(from: object)
         }
@@ -540,6 +595,118 @@ public final class RESTIncrementalStore: NSIncrementalStore {
         lock.withLock {
             pendingTaskChangeCache[snapshot.id] = snapshot
             pendingTaskChangeIDByTaskID[snapshot.taskID] = snapshot.id
+        }
+    }
+
+    private func validateSupportedFetchShape(_ request: NSFetchRequest<NSFetchRequestResult>) throws {
+        let entityName = request.entity?.name
+        guard request.resultType == .managedObjectResultType else {
+            throw RESTIncrementalStoreError.unsupportedFetchShape(
+                entity: entityName,
+                reason: "Only managed-object fetch results are supported"
+            )
+        }
+        guard request.predicate == nil else {
+            throw RESTIncrementalStoreError.unsupportedFetchShape(
+                entity: entityName,
+                reason: "Predicates are not translated to REST endpoints"
+            )
+        }
+        guard request.fetchLimit == 0 else {
+            throw RESTIncrementalStoreError.unsupportedFetchShape(
+                entity: entityName,
+                reason: "fetchLimit is not supported because REST pagination is endpoint-shaped"
+            )
+        }
+        guard request.fetchOffset == 0 else {
+            throw RESTIncrementalStoreError.unsupportedFetchShape(
+                entity: entityName,
+                reason: "fetchOffset is not supported because REST pagination is endpoint-shaped"
+            )
+        }
+        guard request.fetchBatchSize == 0 else {
+            throw RESTIncrementalStoreError.unsupportedFetchShape(
+                entity: entityName,
+                reason: "fetchBatchSize is not supported by the synchronous REST store"
+            )
+        }
+        guard request.propertiesToFetch == nil else {
+            throw RESTIncrementalStoreError.unsupportedFetchShape(
+                entity: entityName,
+                reason: "Partial property fetches are not supported"
+            )
+        }
+        for descriptor in request.sortDescriptors ?? [] {
+            guard descriptor.key != nil else {
+                throw RESTIncrementalStoreError.unsupportedFetchShape(
+                    entity: entityName,
+                    reason: "Only simple key ascending/descending sort descriptors are supported"
+                )
+            }
+        }
+    }
+
+    private func validateSupportedSaveShape(_ request: NSSaveChangesRequest) throws {
+        try validate(objects: request.insertedObjects, operation: "insert") { object in
+            object.entity.name == "CDPendingTaskChange"
+        }
+        try validate(objects: request.updatedObjects, operation: "update") { object in
+            object.entity.name == "CDPendingTaskChange" || object.entity.name == "CDTask"
+        }
+        try validate(objects: request.deletedObjects, operation: "delete") { object in
+            object.entity.name == "CDPendingTaskChange"
+        }
+    }
+
+    private func validate(
+        objects: Set<NSManagedObject>?,
+        operation: String,
+        isSupported: (NSManagedObject) -> Bool
+    ) throws {
+        for object in objects ?? [] where !isSupported(object) {
+            throw RESTIncrementalStoreError.unsupportedSaveShape(entity: object.entity.name, operation: operation)
+        }
+    }
+
+    private func sorted<Value>(
+        _ values: [Value],
+        using descriptors: [NSSortDescriptor]?,
+        valueForKey: (Value, String) -> Any?
+    ) throws -> [Value] {
+        guard let descriptors, !descriptors.isEmpty else {
+            return values
+        }
+        return try values.sorted { lhs, rhs in
+            for descriptor in descriptors {
+                guard let key = descriptor.key,
+                      let left = valueForKey(lhs, key),
+                      let right = valueForKey(rhs, key) else {
+                    throw RESTIncrementalStoreError.unsupportedFetchShape(
+                        entity: nil,
+                        reason: "Unsupported sort key"
+                    )
+                }
+                let comparison = try compare(left, right)
+                if comparison != .orderedSame {
+                    return descriptor.ascending ? comparison == .orderedAscending : comparison == .orderedDescending
+                }
+            }
+            return false
+        }
+    }
+
+    private func compare(_ lhs: Any, _ rhs: Any) throws -> ComparisonResult {
+        switch (lhs, rhs) {
+        case let (left as String, right as String):
+            return left.localizedStandardCompare(right)
+        case let (left as Date, right as Date):
+            return left.compare(right)
+        case let (left as Int, right as Int):
+            return left == right ? .orderedSame : (left < right ? .orderedAscending : .orderedDescending)
+        case let (left as Int64, right as Int64):
+            return left == right ? .orderedSame : (left < right ? .orderedAscending : .orderedDescending)
+        default:
+            throw RESTIncrementalStoreError.unsupportedFetchShape(entity: nil, reason: "Unsupported sort value type")
         }
     }
 

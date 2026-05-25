@@ -127,6 +127,7 @@ The test harness starts an embedded REST server on `127.0.0.1:0`. The current me
 - 2026-05-25 implementation review recommends parking as a successful spike unless the next phase focuses on production ergonomics: pending changes, structured metadata, cancellation, and fail-fast supported Core Data surface area.
 - Pending-change semantics are cleaner when `CDTask` remains the last accepted remote snapshot and `CDPendingTaskChange` carries local write intent plus retry/conflict lifecycle.
 - Pending-change state, pending field names, and loaded-field metadata now use small enums/helpers at call sites while retaining string storage for the spike.
+- The REST store now fails fast for unsupported predicates, fetch limits/count-style fetch shapes, and unsupported domain inserts/deletes instead of silently approximating them.
 - Keep API version, local Core Data model version, and per-resource optimistic concurrency version separate.
 
 ## Next Ideas
@@ -141,6 +142,7 @@ The test harness starts an embedded REST server on `127.0.0.1:0`. The current me
 - [x] Write down which Core Data features remain pleasant over REST in more detail.
 - [x] Spike pending-change semantics for task updates.
 - [x] Replace key pending-change and loaded-field string literals with structured metadata helpers.
+- [x] Add fail-fast tests/errors for unsupported custom-store fetch/save shapes.
 
 ## Cleanup / Graduation
 
