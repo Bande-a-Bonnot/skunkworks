@@ -139,7 +139,7 @@ public final class RESTCoreDataStack {
         }
         let changes = try context.fetch(CDPendingTaskChange.fetchRequestSortedByUpdatedAt())
         var outcomes: [PendingTaskChangeOutcome] = []
-        for change in changes where change.state == "pending" || change.state == "failed" {
+        for change in changes where change.stateValue?.canFlush == true {
             let outcome = try store.applyPendingTaskChange(change.objectID)
             outcomes.append(outcome)
             let taskObjectID = try store.objectIDForTask(id: outcome.taskID)
@@ -380,8 +380,8 @@ public final class RESTIncrementalStore: NSIncrementalStore {
                var existing = pendingTaskChangeCache[existingID] {
                 existing.title = title
                 existing.status = status
-                existing.changedFields = "title,status"
-                existing.state = "pending"
+                existing.changedFields = MetadataListCodec.encode(Set(PendingTaskChangeField.allCases))
+                existing.state = PendingTaskChangeState.pending.rawValue
                 existing.updatedAt = now
                 existing.lastError = nil
                 existing.conflictRemoteVersion = 0
@@ -398,8 +398,8 @@ public final class RESTIncrementalStore: NSIncrementalStore {
                 baseVersion: baseVersion,
                 title: title,
                 status: status,
-                changedFields: "title,status",
-                state: "pending",
+                changedFields: MetadataListCodec.encode(Set(PendingTaskChangeField.allCases)),
+                state: PendingTaskChangeState.pending.rawValue,
                 attemptCount: 0,
                 createdAt: now,
                 updatedAt: now,
@@ -420,7 +420,7 @@ public final class RESTIncrementalStore: NSIncrementalStore {
     public func applyPendingTaskChange(_ objectID: NSManagedObjectID) throws -> PendingTaskChangeOutcome {
         let changeID = try uuidReference(from: objectID)
         var change = try cachedPendingTaskChange(id: changeID)
-        guard change.state == "pending" || change.state == "failed" else {
+        guard PendingTaskChangeState(rawValue: change.state)?.canFlush == true else {
             return .failed(change.taskID, "Pending change is not applyable from state '\(change.state)'")
         }
 
@@ -446,7 +446,7 @@ public final class RESTIncrementalStore: NSIncrementalStore {
             }
             return .applied(change.taskID)
         } catch RESTIncrementalStoreError.conflict(let remote) {
-            change.state = "conflicted"
+            change.state = PendingTaskChangeState.conflicted.rawValue
             change.lastError = "Conflict: remote version \(remote.version) has title '\(remote.title)' and status '\(remote.status)'"
             change.conflictRemoteVersion = remote.version
             change.conflictRemoteTitle = remote.title
@@ -459,7 +459,7 @@ public final class RESTIncrementalStore: NSIncrementalStore {
             }
             return .conflict(change.taskID, remoteVersion: remote.version)
         } catch {
-            change.state = "failed"
+            change.state = PendingTaskChangeState.failed.rawValue
             change.lastError = String(describing: error)
             change.updatedAt = Date()
             change.version += 1
@@ -711,7 +711,9 @@ public final class RESTIncrementalStore: NSIncrementalStore {
 
 private extension RemoteTask {
     var loadedFieldsDescription: String {
-        isDetailLoaded ? "summary,notes" : "summary"
+        isDetailLoaded
+            ? MetadataListCodec.encode(Set(TaskLoadedField.allCases))
+            : TaskLoadedField.summary.rawValue
     }
 }
 

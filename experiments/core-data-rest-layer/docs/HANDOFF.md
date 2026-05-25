@@ -22,7 +22,7 @@ Implemented package:
 - `Sources/CoreDataRESTLayer/RemoteModels.swift` — JSON domain models and shared JSON coding, including summary-vs-detail task decoding.
 - `Sources/CoreDataRESTLayer/RESTClient.swift` — `URLSession` client for `GET /projects`, paginated `GET /projects/{projectID}/tasks`, `GET /tasks/{taskID}`, and `PATCH /tasks/{taskID}`.
 - `Sources/CoreDataRESTLayer/VersionMapping.swift` — explicit API version / local model version compatibility skeleton.
-- `Sources/CoreDataRESTLayer/CoreDataStack.swift` — programmatic Core Data model with `CDProject` / `CDTask`, relationship, version, dirty, conflict metadata, loaded field metadata, `CDPendingTaskChange`, and `CDRemoteRelationshipState`.
+- `Sources/CoreDataRESTLayer/CoreDataStack.swift` — programmatic Core Data model with `CDProject` / `CDTask`, relationship, version, dirty, conflict metadata, loaded field metadata, `CDPendingTaskChange`, `CDRemoteRelationshipState`, and small typed metadata helpers.
 - `Sources/CoreDataRESTLayer/RESTIncrementalStore.swift` — `NSIncrementalStore` that maps Core Data fetches, relationship faults, explicit task detail refreshes, pending task-change staging/flush, task saves, and relationship sync-state synthesis to REST calls.
 - `Sources/CoreDataRESTLayer/ProjectionSync.swift` — earlier pull projection path; keep as historical/baseline code, not the target architecture.
 - `Sources/CoreDataRESTLayerTestServer/EmbeddedRESTServer.swift` — dependency-free `Network.framework` local HTTP server bound to `127.0.0.1:0`, with pagination, latency hooks, summary task lists, and task detail routes.
@@ -43,6 +43,7 @@ Current docs:
 - `docs/solutions/2026-05-25-implementation-review.md` records a Codex 5.5 xhigh read-only review of implementation against the initial brief/goals.
 - `docs/plans/2026-05-25-pending-change-semantics-plan.md` records the Codex 5.5 xhigh plan for the pending-change semantics spike.
 - `docs/solutions/2026-05-25-pending-change-semantics-findings.md` records the implemented pending-change findings.
+- `docs/solutions/2026-05-25-structured-metadata-cleanup-findings.md` records the typed metadata cleanup.
 
 ## Working Direction
 
@@ -69,6 +70,7 @@ Done:
 - `007` — `todos/007-done-p2-add-relationship-sync-state-entity.md`
 - `008` — `todos/008-done-p2-partial-object-field-loading.md`
 - `009` — `todos/009-done-p2-pending-change-semantics.md`
+- `010` — `todos/010-done-p2-structured-metadata-cleanup.md`
 
 Ready: none.
 
@@ -99,12 +101,12 @@ cd experiments/core-data-rest-layer
 swift test
 ```
 
-Last verified 2026-05-25: 25 XCTest tests passed.
+Last verified 2026-05-25: 25 XCTest tests passed for the structured metadata cleanup.
 
 ## Next Action
 
 No ready local todo remains. Good next options:
 
 1. Open a new todo for cancellation/timeout behavior around synchronous `NSIncrementalStore` methods.
-2. Open a new todo to make pending-change states/field names structured instead of stringly typed.
+2. Decide whether pending changes need durable local storage beyond the in-memory custom-store cache.
 3. Decide whether to graduate this into a small library prototype or archive it as findings.

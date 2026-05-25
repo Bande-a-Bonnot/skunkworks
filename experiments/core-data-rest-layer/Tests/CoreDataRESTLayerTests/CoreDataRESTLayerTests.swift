@@ -51,21 +51,21 @@ final class CoreDataRESTLayerTests: XCTestCase {
         let emptyNotesTask = try XCTUnwrap(tasks.first { $0.id != fixture.firstTaskID })
 
         XCTAssertNil(nullNotesTask.notes)
-        XCTAssertFalse(nullNotesTask.hasLoadedField("notes"))
-        XCTAssertEqual(nullNotesTask.loadedFields, "summary")
+        XCTAssertFalse(nullNotesTask.hasLoadedField(.notes))
+        XCTAssertEqual(nullNotesTask.loadedFields, TaskLoadedField.summary.rawValue)
         XCTAssertNil(emptyNotesTask.notes)
-        XCTAssertFalse(emptyNotesTask.hasLoadedField("notes"))
+        XCTAssertFalse(emptyNotesTask.hasLoadedField(.notes))
         XCTAssertEqual(server.requestCount(forPath: "/tasks/\(fixture.firstTaskID.uuidString)"), 0)
 
         try stack.loadTaskDetails(for: nullNotesTask)
         XCTAssertNil(nullNotesTask.notes)
-        XCTAssertTrue(nullNotesTask.hasLoadedField("notes"))
-        XCTAssertEqual(nullNotesTask.loadedFields, "summary,notes")
+        XCTAssertTrue(nullNotesTask.hasLoadedField(.notes))
+        XCTAssertEqual(nullNotesTask.loadedFields, MetadataListCodec.encode(Set(TaskLoadedField.allCases)))
         XCTAssertEqual(server.requestCount(forPath: "/tasks/\(fixture.firstTaskID.uuidString)"), 1)
 
         try stack.loadTaskDetails(for: emptyNotesTask)
         XCTAssertEqual(emptyNotesTask.notes, "")
-        XCTAssertTrue(emptyNotesTask.hasLoadedField("notes"))
+        XCTAssertTrue(emptyNotesTask.hasLoadedField(.notes))
     }
 
     func testRESTIncrementalStoreRelationshipFaultWritesCompletenessState() throws {
@@ -269,8 +269,8 @@ final class CoreDataRESTLayerTests: XCTestCase {
         XCTAssertEqual(change.baseVersion, 1)
         XCTAssertEqual(change.title, "Pending local title")
         XCTAssertEqual(change.status, "done")
-        XCTAssertEqual(change.changedFields, "title,status")
-        XCTAssertEqual(change.state, "pending")
+        XCTAssertEqual(change.changedFieldSet, Set(PendingTaskChangeField.allCases))
+        XCTAssertEqual(change.stateValue, .pending)
 
         let changes = try stack.context.fetch(CDPendingTaskChange.fetchRequest())
         XCTAssertEqual(changes.count, 1)
@@ -323,7 +323,7 @@ final class CoreDataRESTLayerTests: XCTestCase {
 
         XCTAssertEqual(outcomes, [.conflict(fixture.firstTaskID, remoteVersion: 2)])
         let change = try XCTUnwrap(stack.context.fetch(CDPendingTaskChange.fetchRequest()).first)
-        XCTAssertEqual(change.state, "conflicted")
+        XCTAssertEqual(change.stateValue, .conflicted)
         XCTAssertEqual(change.title, "Local pending attempt")
         XCTAssertEqual(change.status, "done")
         XCTAssertEqual(change.conflictRemoteVersion, 2)
@@ -356,7 +356,7 @@ final class CoreDataRESTLayerTests: XCTestCase {
         XCTAssertEqual(failedTaskID, fixture.firstTaskID)
         XCTAssertTrue(message.contains("save unavailable"))
         let change = try XCTUnwrap(stack.context.fetch(CDPendingTaskChange.fetchRequest()).first)
-        XCTAssertEqual(change.state, "failed")
+        XCTAssertEqual(change.stateValue, .failed)
         XCTAssertEqual(change.attemptCount, 1)
         XCTAssertTrue(change.lastError?.contains("save unavailable") == true)
 
@@ -388,7 +388,7 @@ final class CoreDataRESTLayerTests: XCTestCase {
         XCTAssertEqual(change.baseVersion, 1)
         XCTAssertEqual(change.title, "Second pending title")
         XCTAssertEqual(change.status, "done")
-        XCTAssertEqual(change.state, "pending")
+        XCTAssertEqual(change.stateValue, .pending)
         XCTAssertEqual(server.requestCount(forPath: "/tasks/\(fixture.firstTaskID.uuidString)"), 0)
     }
 

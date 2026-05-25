@@ -59,6 +59,39 @@ public class CDRemoteRelationshipState: NSManagedObject {
     @NSManaged public var lastError: String?
 }
 
+public enum TaskLoadedField: String, CaseIterable {
+    case summary
+    case notes
+}
+
+public enum PendingTaskChangeField: String, CaseIterable {
+    case title
+    case status
+}
+
+public enum PendingTaskChangeState: String {
+    case pending
+    case failed
+    case conflicted
+
+    public var canFlush: Bool {
+        self == .pending || self == .failed
+    }
+}
+
+public enum MetadataListCodec {
+    public static func encode<Field: RawRepresentable & CaseIterable>(_ fields: Set<Field>) -> String where Field.RawValue == String {
+        Field.allCases
+            .filter { fields.contains($0) }
+            .map(\.rawValue)
+            .joined(separator: ",")
+    }
+
+    public static func decode<Field: RawRepresentable>(_ rawValue: String, as fieldType: Field.Type = Field.self) -> Set<Field> where Field.RawValue == String {
+        Set(rawValue.split(separator: ",").compactMap { Field(rawValue: String($0)) })
+    }
+}
+
 public final class CoreDataStack {
     public static let localModelVersion: LocalModelVersion = .v1
 
@@ -113,7 +146,7 @@ public final class CoreDataStack {
         let taskTitle = attribute("title", .stringAttributeType, optional: false)
         let taskStatus = attribute("status", .stringAttributeType, optional: false)
         let taskNotes = attribute("notes", .stringAttributeType, optional: true)
-        let taskLoadedFields = attribute("loadedFields", .stringAttributeType, optional: false, defaultValue: "summary")
+        let taskLoadedFields = attribute("loadedFields", .stringAttributeType, optional: false, defaultValue: TaskLoadedField.summary.rawValue)
         let taskUpdatedAt = attribute("updatedAt", .dateAttributeType, optional: false)
         let taskVersion = attribute("version", .integer64AttributeType, optional: false, defaultValue: 0)
         let taskIsDirty = attribute("isDirty", .booleanAttributeType, optional: false, defaultValue: false)
@@ -130,7 +163,7 @@ public final class CoreDataStack {
         let pendingTitle = attribute("title", .stringAttributeType, optional: false)
         let pendingStatus = attribute("status", .stringAttributeType, optional: false)
         let pendingChangedFields = attribute("changedFields", .stringAttributeType, optional: false)
-        let pendingState = attribute("state", .stringAttributeType, optional: false, defaultValue: "pending")
+        let pendingState = attribute("state", .stringAttributeType, optional: false, defaultValue: PendingTaskChangeState.pending.rawValue)
         let pendingAttemptCount = attribute("attemptCount", .integer64AttributeType, optional: false, defaultValue: 0)
         let pendingCreatedAt = attribute("createdAt", .dateAttributeType, optional: false)
         let pendingUpdatedAt = attribute("updatedAt", .dateAttributeType, optional: false)
@@ -261,6 +294,14 @@ public extension CDTask {
         Set(loadedFields.split(separator: ",").map(String.init))
     }
 
+    var loadedFieldSet: Set<TaskLoadedField> {
+        MetadataListCodec.decode(loadedFields)
+    }
+
+    func hasLoadedField(_ field: TaskLoadedField) -> Bool {
+        loadedFieldSet.contains(field)
+    }
+
     func hasLoadedField(_ field: String) -> Bool {
         loadedFieldNames.contains(field)
     }
@@ -277,6 +318,14 @@ public extension CDTask {
 }
 
 public extension CDPendingTaskChange {
+    var stateValue: PendingTaskChangeState? {
+        PendingTaskChangeState(rawValue: state)
+    }
+
+    var changedFieldSet: Set<PendingTaskChangeField> {
+        MetadataListCodec.decode(changedFields)
+    }
+
     static func fetchRequest() -> NSFetchRequest<CDPendingTaskChange> {
         NSFetchRequest<CDPendingTaskChange>(entityName: "CDPendingTaskChange")
     }

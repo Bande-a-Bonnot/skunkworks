@@ -150,7 +150,9 @@ public final class ProjectionSync {
 
 private extension RemoteTask {
     var loadedFieldsDescription: String {
-        isDetailLoaded ? "summary,notes" : "summary"
+        isDetailLoaded
+            ? MetadataListCodec.encode(Set(TaskLoadedField.allCases))
+            : TaskLoadedField.summary.rawValue
     }
 }
 
