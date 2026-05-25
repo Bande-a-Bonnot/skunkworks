@@ -22,11 +22,11 @@ Implemented package:
 - `Sources/CoreDataRESTLayer/RemoteModels.swift` — JSON domain models and shared JSON coding, including summary-vs-detail task decoding.
 - `Sources/CoreDataRESTLayer/RESTClient.swift` — `URLSession` client for `GET /projects`, paginated `GET /projects/{projectID}/tasks`, `GET /tasks/{taskID}`, and `PATCH /tasks/{taskID}`.
 - `Sources/CoreDataRESTLayer/VersionMapping.swift` — explicit API version / local model version compatibility skeleton.
-- `Sources/CoreDataRESTLayer/CoreDataStack.swift` — programmatic Core Data model with `CDProject` / `CDTask`, relationship, version, dirty, conflict metadata, loaded field metadata, and `CDRemoteRelationshipState`.
-- `Sources/CoreDataRESTLayer/RESTIncrementalStore.swift` — `NSIncrementalStore` that maps Core Data fetches, relationship faults, explicit task detail refreshes, task saves, and relationship sync-state synthesis to REST calls.
+- `Sources/CoreDataRESTLayer/CoreDataStack.swift` — programmatic Core Data model with `CDProject` / `CDTask`, relationship, version, dirty, conflict metadata, loaded field metadata, `CDPendingTaskChange`, and `CDRemoteRelationshipState`.
+- `Sources/CoreDataRESTLayer/RESTIncrementalStore.swift` — `NSIncrementalStore` that maps Core Data fetches, relationship faults, explicit task detail refreshes, pending task-change staging/flush, task saves, and relationship sync-state synthesis to REST calls.
 - `Sources/CoreDataRESTLayer/ProjectionSync.swift` — earlier pull projection path; keep as historical/baseline code, not the target architecture.
 - `Sources/CoreDataRESTLayerTestServer/EmbeddedRESTServer.swift` — dependency-free `Network.framework` local HTTP server bound to `127.0.0.1:0`, with pagination, latency hooks, summary task lists, and task detail routes.
-- `Tests/CoreDataRESTLayerTests/CoreDataRESTLayerTests.swift` — acceptance tests for incremental-store fetch/fault/save, partial detail loading, conflict/error behavior, background context helper, plus earlier projection, pagination, latency, and version-header tests.
+- `Tests/CoreDataRESTLayerTests/CoreDataRESTLayerTests.swift` — acceptance tests for incremental-store fetch/fault/save, pending task changes, partial detail loading, conflict/error behavior, background context helper, plus earlier projection, pagination, latency, and version-header tests.
 
 Current docs:
 
@@ -41,7 +41,8 @@ Current docs:
 - `docs/solutions/2026-05-24-partial-field-loading-findings.md` records partial field/detail loading findings.
 - `docs/solutions/2026-05-24-core-data-over-rest-synthesis.md` synthesizes which Core Data features remain pleasant over REST and where REST semantics must stay explicit.
 - `docs/solutions/2026-05-25-implementation-review.md` records a Codex 5.5 xhigh read-only review of implementation against the initial brief/goals.
-- `docs/plans/2026-05-25-pending-change-semantics-plan.md` records the Codex 5.5 xhigh plan for the next pending-change semantics spike.
+- `docs/plans/2026-05-25-pending-change-semantics-plan.md` records the Codex 5.5 xhigh plan for the pending-change semantics spike.
+- `docs/solutions/2026-05-25-pending-change-semantics-findings.md` records the implemented pending-change findings.
 
 ## Working Direction
 
@@ -67,10 +68,9 @@ Done:
 - `006` — `todos/006-done-p1-rest-store-ergonomics-and-errors.md`
 - `007` — `todos/007-done-p2-add-relationship-sync-state-entity.md`
 - `008` — `todos/008-done-p2-partial-object-field-loading.md`
+- `009` — `todos/009-done-p2-pending-change-semantics.md`
 
-Ready:
-
-- `009` — `todos/009-ready-p2-pending-change-semantics.md`
+Ready: none.
 
 ## Open Questions
 
@@ -86,7 +86,7 @@ Resolved so far:
 Still open:
 
 - Should loading/error/conflict/completeness state stay on managed objects, move to separate sync records, or live in caller state as scenarios grow?
-- Should local edits remain dirty flags on managed objects, or become separate pending-change entities / child-context units of work?
+- Should pending changes become durable local storage if this moves beyond an in-memory custom-store spike?
 - Can synchronous store methods be made cancellable enough for real app use?
 - How far should explicit partial-field metadata go before it needs a separate sync/detail-state entity instead of `CDTask.loadedFields`?
 
@@ -99,10 +99,12 @@ cd experiments/core-data-rest-layer
 swift test
 ```
 
-Last verified 2026-05-24: 20 XCTest tests passed.
+Last verified 2026-05-25: 25 XCTest tests passed.
 
 ## Next Action
 
-Pick up `todos/009-ready-p2-pending-change-semantics.md`: implement the narrow pending-change spike from `docs/plans/2026-05-25-pending-change-semantics-plan.md`.
+No ready local todo remains. Good next options:
 
-After that, good next options are cancellation/timeout behavior around synchronous `NSIncrementalStore` methods, or a graduate/archive decision.
+1. Open a new todo for cancellation/timeout behavior around synchronous `NSIncrementalStore` methods.
+2. Open a new todo to make pending-change states/field names structured instead of stringly typed.
+3. Decide whether to graduate this into a small library prototype or archive it as findings.

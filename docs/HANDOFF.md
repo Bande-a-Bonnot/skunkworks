@@ -49,7 +49,7 @@ Existing root `nohup.out` was present from before setup and is ignored. Do not d
 
 Active / next up:
 
-- `experiments/core-data-rest-layer/` — read `experiments/core-data-rest-layer/docs/HANDOFF.md`. Local todo `009` is ready for pending-change semantics.
+- `experiments/core-data-rest-layer/` — read `experiments/core-data-rest-layer/docs/HANDOFF.md`.
 
 Parked / optional follow-up:
 
@@ -78,7 +78,7 @@ Root todos track repo-level or cross-experiment work only. Experiment-specific w
 
 ## Likely Next Actions
 
-1. Continue `core-data-rest-layer` with local todo `009`: pending-change semantics.
+1. Choose/open the next `core-data-rest-layer` todo; pending-change semantics (`009`) is done.
 2. Keep root handoff minimal; update experiment-local handoff with implementation details.
 3. Decide later whether `experiments/README.md` should stay a manual catalog, become generated, or both.
 

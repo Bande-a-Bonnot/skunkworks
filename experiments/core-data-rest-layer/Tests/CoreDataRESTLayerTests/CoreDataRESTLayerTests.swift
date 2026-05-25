@@ -249,6 +249,149 @@ final class CoreDataRESTLayerTests: XCTestCase {
         XCTAssertEqual(fetchedNames, ["Skunkworks"])
     }
 
+    func testRESTIncrementalStoreStagingPendingChangeDoesNotMutateSnapshotOrPatch() throws {
+        let fixture = Fixture.make()
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL)
+        let project = try XCTUnwrap(stack.context.fetch(CDProject.fetchRequestSortedByName()).first)
+        let task = try XCTUnwrap(project.tasks.first { $0.id == fixture.firstTaskID })
+
+        let change = try stack.stageTaskUpdate(for: task, title: "Pending local title", status: "done")
+
+        XCTAssertEqual(task.title, "Wire embedded server")
+        XCTAssertEqual(task.status, "open")
+        XCTAssertEqual(try server.currentTask(id: fixture.firstTaskID).title, "Wire embedded server")
+        XCTAssertEqual(server.requestCount(forPath: "/tasks/\(fixture.firstTaskID.uuidString)"), 0)
+        XCTAssertEqual(change.taskID, fixture.firstTaskID)
+        XCTAssertEqual(change.baseVersion, 1)
+        XCTAssertEqual(change.title, "Pending local title")
+        XCTAssertEqual(change.status, "done")
+        XCTAssertEqual(change.changedFields, "title,status")
+        XCTAssertEqual(change.state, "pending")
+
+        let changes = try stack.context.fetch(CDPendingTaskChange.fetchRequest())
+        XCTAssertEqual(changes.count, 1)
+    }
+
+    func testRESTIncrementalStoreFlushPendingChangePatchesServerAndClearsPending() throws {
+        let fixture = Fixture.make()
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL)
+        let project = try XCTUnwrap(stack.context.fetch(CDProject.fetchRequestSortedByName()).first)
+        let task = try XCTUnwrap(project.tasks.first { $0.id == fixture.firstTaskID })
+        _ = try stack.stageTaskUpdate(for: task, title: "Applied pending title", status: "done")
+
+        let outcomes = try stack.flushPendingTaskChanges()
+
+        XCTAssertEqual(outcomes, [.applied(fixture.firstTaskID)])
+        XCTAssertEqual(server.requestCount(forPath: "/tasks/\(fixture.firstTaskID.uuidString)"), 1)
+        let remote = try server.currentTask(id: fixture.firstTaskID)
+        XCTAssertEqual(remote.title, "Applied pending title")
+        XCTAssertEqual(remote.status, "done")
+        XCTAssertEqual(remote.version, 2)
+        XCTAssertEqual(task.title, "Applied pending title")
+        XCTAssertEqual(task.status, "done")
+        XCTAssertEqual(task.version, 2)
+        XCTAssertFalse(task.isDirty)
+        XCTAssertTrue(try stack.context.fetch(CDPendingTaskChange.fetchRequest()).isEmpty)
+    }
+
+    func testRESTIncrementalStorePendingChangeConflictKeepsLocalAttemptSeparateFromRemoteSnapshot() throws {
+        let fixture = Fixture.make()
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL)
+        let project = try XCTUnwrap(stack.context.fetch(CDProject.fetchRequestSortedByName()).first)
+        let task = try XCTUnwrap(project.tasks.first { $0.id == fixture.firstTaskID })
+        _ = try stack.stageTaskUpdate(for: task, title: "Local pending attempt", status: "done")
+        try server.mutateTask(id: fixture.firstTaskID) { task in
+            task.title = "Remote changed first"
+            task.status = "blocked"
+            task.version = 2
+            task.updatedAt = Fixture.laterDate
+        }
+
+        let outcomes = try stack.flushPendingTaskChanges()
+
+        XCTAssertEqual(outcomes, [.conflict(fixture.firstTaskID, remoteVersion: 2)])
+        let change = try XCTUnwrap(stack.context.fetch(CDPendingTaskChange.fetchRequest()).first)
+        XCTAssertEqual(change.state, "conflicted")
+        XCTAssertEqual(change.title, "Local pending attempt")
+        XCTAssertEqual(change.status, "done")
+        XCTAssertEqual(change.conflictRemoteVersion, 2)
+        XCTAssertEqual(change.conflictRemoteTitle, "Remote changed first")
+        XCTAssertEqual(change.conflictRemoteStatus, "blocked")
+        XCTAssertEqual(task.title, "Remote changed first")
+        XCTAssertEqual(task.status, "blocked")
+        XCTAssertEqual(task.version, 2)
+    }
+
+    func testRESTIncrementalStorePendingChangeHTTPFailureCanRetry() throws {
+        let fixture = Fixture.make()
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL)
+        let project = try XCTUnwrap(stack.context.fetch(CDProject.fetchRequestSortedByName()).first)
+        let task = try XCTUnwrap(project.tasks.first { $0.id == fixture.firstTaskID })
+        _ = try stack.stageTaskUpdate(for: task, title: "Retry pending title", status: "done")
+        let path = "/tasks/\(fixture.firstTaskID.uuidString)"
+        server.setForcedResponse(status: 500, body: "save unavailable", forPathPrefix: path, method: "PATCH")
+
+        let failedOutcomes = try stack.flushPendingTaskChanges()
+
+        XCTAssertEqual(failedOutcomes.count, 1)
+        guard case .failed(let failedTaskID, let message) = failedOutcomes.first else {
+            return XCTFail("Expected failed pending outcome")
+        }
+        XCTAssertEqual(failedTaskID, fixture.firstTaskID)
+        XCTAssertTrue(message.contains("save unavailable"))
+        let change = try XCTUnwrap(stack.context.fetch(CDPendingTaskChange.fetchRequest()).first)
+        XCTAssertEqual(change.state, "failed")
+        XCTAssertEqual(change.attemptCount, 1)
+        XCTAssertTrue(change.lastError?.contains("save unavailable") == true)
+
+        server.clearForcedResponse(forPathPrefix: path)
+        let retryOutcomes = try stack.flushPendingTaskChanges()
+
+        XCTAssertEqual(retryOutcomes, [.applied(fixture.firstTaskID)])
+        XCTAssertEqual(server.requestCount(forPath: path), 2)
+        XCTAssertEqual(try server.currentTask(id: fixture.firstTaskID).title, "Retry pending title")
+        XCTAssertTrue(try stack.context.fetch(CDPendingTaskChange.fetchRequest()).isEmpty)
+    }
+
+    func testRESTIncrementalStoreRepeatedStagingCoalescesPendingChange() throws {
+        let fixture = Fixture.make()
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL)
+        let project = try XCTUnwrap(stack.context.fetch(CDProject.fetchRequestSortedByName()).first)
+        let task = try XCTUnwrap(project.tasks.first { $0.id == fixture.firstTaskID })
+        let first = try stack.stageTaskUpdate(for: task, title: "First pending title", status: "open")
+        let second = try stack.stageTaskUpdate(for: task, title: "Second pending title", status: "done")
+
+        XCTAssertEqual(first.id, second.id)
+        let changes = try stack.context.fetch(CDPendingTaskChange.fetchRequest())
+        let change = try XCTUnwrap(changes.first)
+        XCTAssertEqual(changes.count, 1)
+        XCTAssertEqual(change.baseVersion, 1)
+        XCTAssertEqual(change.title, "Second pending title")
+        XCTAssertEqual(change.status, "done")
+        XCTAssertEqual(change.state, "pending")
+        XCTAssertEqual(server.requestCount(forPath: "/tasks/\(fixture.firstTaskID.uuidString)"), 0)
+    }
+
     func testRESTIncrementalStoreSaveConflictMarksObjectAndThrows() throws {
         let fixture = Fixture.make()
         let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)

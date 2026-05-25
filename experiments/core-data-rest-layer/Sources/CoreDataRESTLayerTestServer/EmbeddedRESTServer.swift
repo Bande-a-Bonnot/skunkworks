@@ -127,6 +127,12 @@ public final class EmbeddedRESTServer {
         }
     }
 
+    public func clearForcedResponse(forPathPrefix pathPrefix: String) {
+        stateQueue.sync {
+            _ = forcedResponsesByPathPrefix.removeValue(forKey: pathPrefix)
+        }
+    }
+
     public func lastRequestHeader(_ name: String) -> String? {
         stateQueue.sync {
             lastRequestHeaders[name.lowercased()]

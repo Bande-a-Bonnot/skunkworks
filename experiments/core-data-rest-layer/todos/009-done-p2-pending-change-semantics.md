@@ -1,5 +1,5 @@
 ---
-status: ready
+status: done
 priority: p2
 issue_id: "009"
 tags: [core-data, custom-store, pending-changes, conflicts]

@@ -77,6 +77,12 @@ public enum RESTIncrementalStoreError: Error, CustomStringConvertible, CustomNSE
     }
 }
 
+public enum PendingTaskChangeOutcome: Equatable {
+    case applied(UUID)
+    case conflict(UUID, remoteVersion: Int)
+    case failed(UUID, String)
+}
+
 public final class RESTCoreDataStack {
     public let coordinator: NSPersistentStoreCoordinator
     public let context: NSManagedObjectContext
@@ -110,6 +116,49 @@ public final class RESTCoreDataStack {
         try store.loadTaskDetails(for: task.objectID)
         task.managedObjectContext?.refresh(task, mergeChanges: false)
     }
+
+    public func stageTaskUpdate(for task: CDTask, title: String, status: String) throws -> CDPendingTaskChange {
+        guard let store = coordinator.persistentStores.first as? RESTIncrementalStore else {
+            throw RESTIncrementalStoreError.unsupportedEntity(task.entity.name)
+        }
+        let objectID = try store.stageTaskUpdate(
+            taskID: task.id,
+            baseVersion: Int(task.version),
+            title: title,
+            status: status
+        )
+        guard let change = context.object(with: objectID) as? CDPendingTaskChange else {
+            throw RESTIncrementalStoreError.invalidReferenceObject(objectID)
+        }
+        return change
+    }
+
+    public func flushPendingTaskChanges() throws -> [PendingTaskChangeOutcome] {
+        guard let store = coordinator.persistentStores.first as? RESTIncrementalStore else {
+            throw RESTIncrementalStoreError.unsupportedEntity("CDPendingTaskChange")
+        }
+        let changes = try context.fetch(CDPendingTaskChange.fetchRequestSortedByUpdatedAt())
+        var outcomes: [PendingTaskChangeOutcome] = []
+        for change in changes where change.state == "pending" || change.state == "failed" {
+            let outcome = try store.applyPendingTaskChange(change.objectID)
+            outcomes.append(outcome)
+            let taskObjectID = try store.objectIDForTask(id: outcome.taskID)
+            if let task = context.registeredObject(for: taskObjectID) {
+                context.refresh(task, mergeChanges: false)
+            }
+            context.refresh(change, mergeChanges: false)
+        }
+        return outcomes
+    }
+}
+
+private extension PendingTaskChangeOutcome {
+    var taskID: UUID {
+        switch self {
+        case let .applied(id), let .conflict(id, _), let .failed(id, _):
+            return id
+        }
+    }
 }
 
 @objc(RESTIncrementalStore)
@@ -125,6 +174,8 @@ public final class RESTIncrementalStore: NSIncrementalStore {
     private var projectCache: [UUID: RemoteProject] = [:]
     private var taskCache: [UUID: RemoteTask] = [:]
     private var taskIDsByProjectID: [UUID: [UUID]] = [:]
+    private var pendingTaskChangeCache: [UUID: PendingTaskChangeSnapshot] = [:]
+    private var pendingTaskChangeIDByTaskID: [UUID: UUID] = [:]
     private var relationshipStateCache: [String: RemoteRelationshipStateSnapshot] = [:]
 
     public static func registerStoreClass() {
@@ -197,6 +248,12 @@ public final class RESTIncrementalStore: NSIncrementalStore {
             return tasks.map { task in
                 context.object(with: newObjectID(for: entity(named: "CDTask"), referenceObject: task.id.uuidString))
             }
+        case "CDPendingTaskChange":
+            let changes = lock.withLock { Array(pendingTaskChangeCache.values) }
+                .sorted { $0.updatedAt < $1.updatedAt }
+            return changes.map { change in
+                context.object(with: newObjectID(for: entity(named: "CDPendingTaskChange"), referenceObject: change.id.uuidString))
+            }
         case "CDRemoteRelationshipState":
             let states = lock.withLock { Array(relationshipStateCache.values) }
             return states.map { state in
@@ -243,6 +300,13 @@ public final class RESTIncrementalStore: NSIncrementalStore {
                 objectID: objectID,
                 withValues: loadedValues,
                 version: UInt64(task.version)
+            )
+        case "CDPendingTaskChange":
+            let change = try cachedPendingTaskChange(id: try uuidReference(from: objectID))
+            return NSIncrementalStoreNode(
+                objectID: objectID,
+                withValues: change.values,
+                version: UInt64(change.version)
             )
         case "CDRemoteRelationshipState":
             let state = try cachedRelationshipState(reference: try stringReference(from: objectID))
@@ -305,6 +369,107 @@ public final class RESTIncrementalStore: NSIncrementalStore {
         _ = try fetchRemoteTaskDetail(id: try uuidReference(from: objectID))
     }
 
+    public func objectIDForTask(id: UUID) throws -> NSManagedObjectID {
+        newObjectID(for: entity(named: "CDTask"), referenceObject: id.uuidString)
+    }
+
+    public func stageTaskUpdate(taskID: UUID, baseVersion: Int, title: String, status: String) throws -> NSManagedObjectID {
+        let now = Date()
+        let change = lock.withLock { () -> PendingTaskChangeSnapshot in
+            if let existingID = pendingTaskChangeIDByTaskID[taskID],
+               var existing = pendingTaskChangeCache[existingID] {
+                existing.title = title
+                existing.status = status
+                existing.changedFields = "title,status"
+                existing.state = "pending"
+                existing.updatedAt = now
+                existing.lastError = nil
+                existing.conflictRemoteVersion = 0
+                existing.conflictRemoteTitle = nil
+                existing.conflictRemoteStatus = nil
+                existing.version += 1
+                pendingTaskChangeCache[existing.id] = existing
+                return existing
+            }
+
+            let newChange = PendingTaskChangeSnapshot(
+                id: UUID(),
+                taskID: taskID,
+                baseVersion: baseVersion,
+                title: title,
+                status: status,
+                changedFields: "title,status",
+                state: "pending",
+                attemptCount: 0,
+                createdAt: now,
+                updatedAt: now,
+                lastAttemptedAt: nil,
+                lastError: nil,
+                conflictRemoteVersion: 0,
+                conflictRemoteTitle: nil,
+                conflictRemoteStatus: nil,
+                version: 1
+            )
+            pendingTaskChangeCache[newChange.id] = newChange
+            pendingTaskChangeIDByTaskID[taskID] = newChange.id
+            return newChange
+        }
+        return newObjectID(for: entity(named: "CDPendingTaskChange"), referenceObject: change.id.uuidString)
+    }
+
+    public func applyPendingTaskChange(_ objectID: NSManagedObjectID) throws -> PendingTaskChangeOutcome {
+        let changeID = try uuidReference(from: objectID)
+        var change = try cachedPendingTaskChange(id: changeID)
+        guard change.state == "pending" || change.state == "failed" else {
+            return .failed(change.taskID, "Pending change is not applyable from state '\(change.state)'")
+        }
+
+        change.attemptCount += 1
+        change.lastAttemptedAt = Date()
+        change.updatedAt = change.lastAttemptedAt!
+        change.version += 1
+        lock.withLock {
+            pendingTaskChangeCache[change.id] = change
+        }
+
+        do {
+            let remote = try requireClient().patchTask(
+                id: change.taskID,
+                title: change.title,
+                status: change.status,
+                version: change.baseVersion
+            )
+            lock.withLock {
+                taskCache[remote.id] = remote
+                pendingTaskChangeCache.removeValue(forKey: change.id)
+                pendingTaskChangeIDByTaskID.removeValue(forKey: change.taskID)
+            }
+            return .applied(change.taskID)
+        } catch RESTIncrementalStoreError.conflict(let remote) {
+            change.state = "conflicted"
+            change.lastError = "Conflict: remote version \(remote.version) has title '\(remote.title)' and status '\(remote.status)'"
+            change.conflictRemoteVersion = remote.version
+            change.conflictRemoteTitle = remote.title
+            change.conflictRemoteStatus = remote.status
+            change.updatedAt = Date()
+            change.version += 1
+            lock.withLock {
+                taskCache[remote.id] = remote
+                pendingTaskChangeCache[change.id] = change
+            }
+            return .conflict(change.taskID, remoteVersion: remote.version)
+        } catch {
+            change.state = "failed"
+            change.lastError = String(describing: error)
+            change.updatedAt = Date()
+            change.version += 1
+            lock.withLock {
+                pendingTaskChangeCache[change.id] = change
+            }
+            return .failed(change.taskID, change.lastError ?? "Unknown pending change failure")
+        }
+    }
+
     public override func obtainPermanentIDs(for array: [NSManagedObject]) throws -> [NSManagedObjectID] {
         try array.map { object in
             if object.entity.name == "CDRemoteRelationshipState",
@@ -319,6 +484,23 @@ public final class RESTIncrementalStore: NSIncrementalStore {
     }
 
     private func executeSave(_ saveRequest: NSSaveChangesRequest) throws {
+        for object in saveRequest.insertedObjects ?? [] where object.entity.name == "CDPendingTaskChange" {
+            try upsertPendingTaskChange(from: object)
+        }
+        for object in saveRequest.updatedObjects ?? [] where object.entity.name == "CDPendingTaskChange" {
+            try upsertPendingTaskChange(from: object)
+        }
+        for object in saveRequest.deletedObjects ?? [] where object.entity.name == "CDPendingTaskChange" {
+            guard let id = object.value(forKey: "id") as? UUID else {
+                throw RESTIncrementalStoreError.invalidReferenceObject(object)
+            }
+            lock.withLock {
+                if let change = pendingTaskChangeCache.removeValue(forKey: id) {
+                    pendingTaskChangeIDByTaskID.removeValue(forKey: change.taskID)
+                }
+            }
+        }
+
         for object in saveRequest.updatedObjects ?? [] where object.entity.name == "CDTask" {
             guard let id = object.value(forKey: "id") as? UUID else {
                 throw RESTIncrementalStoreError.invalidReferenceObject(object)
@@ -348,6 +530,16 @@ public final class RESTIncrementalStore: NSIncrementalStore {
             object.setValue(false, forKey: "isDirty")
             object.setValue(nil, forKey: "lastSyncError")
             object.setValue(nil, forKey: "conflictState")
+        }
+    }
+
+    private func upsertPendingTaskChange(from object: NSManagedObject) throws {
+        guard let snapshot = PendingTaskChangeSnapshot(object: object) else {
+            throw RESTIncrementalStoreError.invalidReferenceObject(object)
+        }
+        lock.withLock {
+            pendingTaskChangeCache[snapshot.id] = snapshot
+            pendingTaskChangeIDByTaskID[snapshot.taskID] = snapshot.id
         }
     }
 
@@ -402,6 +594,13 @@ public final class RESTIncrementalStore: NSIncrementalStore {
         return try fetchRemoteTasksForAllProjects().first { $0.id == id } ?? {
             throw RESTIncrementalStoreError.invalidReferenceObject(id)
         }()
+    }
+
+    private func cachedPendingTaskChange(id: UUID) throws -> PendingTaskChangeSnapshot {
+        if let change = lock.withLock({ pendingTaskChangeCache[id] }) {
+            return change
+        }
+        throw RESTIncrementalStoreError.invalidReferenceObject(id)
     }
 
     private func cachedRelationshipState(reference: String) throws -> RemoteRelationshipStateSnapshot {
@@ -513,6 +712,119 @@ public final class RESTIncrementalStore: NSIncrementalStore {
 private extension RemoteTask {
     var loadedFieldsDescription: String {
         isDetailLoaded ? "summary,notes" : "summary"
+    }
+}
+
+private struct PendingTaskChangeSnapshot {
+    var id: UUID
+    var taskID: UUID
+    var baseVersion: Int
+    var title: String
+    var status: String
+    var changedFields: String
+    var state: String
+    var attemptCount: Int
+    var createdAt: Date
+    var updatedAt: Date
+    var lastAttemptedAt: Date?
+    var lastError: String?
+    var conflictRemoteVersion: Int
+    var conflictRemoteTitle: String?
+    var conflictRemoteStatus: String?
+    var version: Int
+
+    init(
+        id: UUID,
+        taskID: UUID,
+        baseVersion: Int,
+        title: String,
+        status: String,
+        changedFields: String,
+        state: String,
+        attemptCount: Int,
+        createdAt: Date,
+        updatedAt: Date,
+        lastAttemptedAt: Date?,
+        lastError: String?,
+        conflictRemoteVersion: Int,
+        conflictRemoteTitle: String?,
+        conflictRemoteStatus: String?,
+        version: Int
+    ) {
+        self.id = id
+        self.taskID = taskID
+        self.baseVersion = baseVersion
+        self.title = title
+        self.status = status
+        self.changedFields = changedFields
+        self.state = state
+        self.attemptCount = attemptCount
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.lastAttemptedAt = lastAttemptedAt
+        self.lastError = lastError
+        self.conflictRemoteVersion = conflictRemoteVersion
+        self.conflictRemoteTitle = conflictRemoteTitle
+        self.conflictRemoteStatus = conflictRemoteStatus
+        self.version = version
+    }
+
+    init?(object: NSManagedObject) {
+        guard let id = object.value(forKey: "id") as? UUID,
+              let taskID = object.value(forKey: "taskID") as? UUID,
+              let title = object.value(forKey: "title") as? String,
+              let status = object.value(forKey: "status") as? String,
+              let changedFields = object.value(forKey: "changedFields") as? String,
+              let state = object.value(forKey: "state") as? String,
+              let createdAt = object.value(forKey: "createdAt") as? Date,
+              let updatedAt = object.value(forKey: "updatedAt") as? Date else {
+            return nil
+        }
+        self.id = id
+        self.taskID = taskID
+        baseVersion = Int(object.value(forKey: "baseVersion") as? Int64 ?? 0)
+        self.title = title
+        self.status = status
+        self.changedFields = changedFields
+        self.state = state
+        attemptCount = Int(object.value(forKey: "attemptCount") as? Int64 ?? 0)
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        lastAttemptedAt = object.value(forKey: "lastAttemptedAt") as? Date
+        lastError = object.value(forKey: "lastError") as? String
+        conflictRemoteVersion = Int(object.value(forKey: "conflictRemoteVersion") as? Int64 ?? 0)
+        conflictRemoteTitle = object.value(forKey: "conflictRemoteTitle") as? String
+        conflictRemoteStatus = object.value(forKey: "conflictRemoteStatus") as? String
+        version = 1
+    }
+
+    var values: [String: Any] {
+        var values: [String: Any] = [
+            "id": id,
+            "taskID": taskID,
+            "baseVersion": Int64(baseVersion),
+            "title": title,
+            "status": status,
+            "changedFields": changedFields,
+            "state": state,
+            "attemptCount": Int64(attemptCount),
+            "createdAt": createdAt,
+            "updatedAt": updatedAt,
+            "conflictRemoteVersion": Int64(conflictRemoteVersion)
+        ]
+        if let lastAttemptedAt {
+            values["lastAttemptedAt"] = lastAttemptedAt
+        }
+        if let lastError {
+            values["lastError"] = lastError
+        }
+        if let conflictRemoteTitle {
+            values["conflictRemoteTitle"] = conflictRemoteTitle
+        }
+        if let conflictRemoteStatus {
+            values["conflictRemoteStatus"] = conflictRemoteStatus
+        }
+        return values
     }
 }
 

@@ -25,6 +25,25 @@ public class CDTask: NSManagedObject {
     @NSManaged public var project: CDProject?
 }
 
+@objc(CDPendingTaskChange)
+public class CDPendingTaskChange: NSManagedObject {
+    @NSManaged public var id: UUID
+    @NSManaged public var taskID: UUID
+    @NSManaged public var baseVersion: Int64
+    @NSManaged public var title: String
+    @NSManaged public var status: String
+    @NSManaged public var changedFields: String
+    @NSManaged public var state: String
+    @NSManaged public var attemptCount: Int64
+    @NSManaged public var createdAt: Date
+    @NSManaged public var updatedAt: Date
+    @NSManaged public var lastAttemptedAt: Date?
+    @NSManaged public var lastError: String?
+    @NSManaged public var conflictRemoteVersion: Int64
+    @NSManaged public var conflictRemoteTitle: String?
+    @NSManaged public var conflictRemoteStatus: String?
+}
+
 @objc(CDRemoteRelationshipState)
 public class CDRemoteRelationshipState: NSManagedObject {
     @NSManaged public var id: String
@@ -101,6 +120,26 @@ public final class CoreDataStack {
         let taskLastSyncError = attribute("lastSyncError", .stringAttributeType, optional: true)
         let taskConflictState = attribute("conflictState", .stringAttributeType, optional: true)
 
+        let pendingTaskChange = NSEntityDescription()
+        pendingTaskChange.name = "CDPendingTaskChange"
+        pendingTaskChange.managedObjectClassName = NSStringFromClass(CDPendingTaskChange.self)
+
+        let pendingId = attribute("id", .UUIDAttributeType, optional: false)
+        let pendingTaskID = attribute("taskID", .UUIDAttributeType, optional: false)
+        let pendingBaseVersion = attribute("baseVersion", .integer64AttributeType, optional: false, defaultValue: 0)
+        let pendingTitle = attribute("title", .stringAttributeType, optional: false)
+        let pendingStatus = attribute("status", .stringAttributeType, optional: false)
+        let pendingChangedFields = attribute("changedFields", .stringAttributeType, optional: false)
+        let pendingState = attribute("state", .stringAttributeType, optional: false, defaultValue: "pending")
+        let pendingAttemptCount = attribute("attemptCount", .integer64AttributeType, optional: false, defaultValue: 0)
+        let pendingCreatedAt = attribute("createdAt", .dateAttributeType, optional: false)
+        let pendingUpdatedAt = attribute("updatedAt", .dateAttributeType, optional: false)
+        let pendingLastAttemptedAt = attribute("lastAttemptedAt", .dateAttributeType, optional: true)
+        let pendingLastError = attribute("lastError", .stringAttributeType, optional: true)
+        let pendingConflictRemoteVersion = attribute("conflictRemoteVersion", .integer64AttributeType, optional: false, defaultValue: 0)
+        let pendingConflictRemoteTitle = attribute("conflictRemoteTitle", .stringAttributeType, optional: true)
+        let pendingConflictRemoteStatus = attribute("conflictRemoteStatus", .stringAttributeType, optional: true)
+
         let relationshipState = NSEntityDescription()
         relationshipState.name = "CDRemoteRelationshipState"
         relationshipState.managedObjectClassName = NSStringFromClass(CDRemoteRelationshipState.self)
@@ -150,6 +189,23 @@ public final class CoreDataStack {
             taskConflictState,
             taskProject
         ]
+        pendingTaskChange.properties = [
+            pendingId,
+            pendingTaskID,
+            pendingBaseVersion,
+            pendingTitle,
+            pendingStatus,
+            pendingChangedFields,
+            pendingState,
+            pendingAttemptCount,
+            pendingCreatedAt,
+            pendingUpdatedAt,
+            pendingLastAttemptedAt,
+            pendingLastError,
+            pendingConflictRemoteVersion,
+            pendingConflictRemoteTitle,
+            pendingConflictRemoteStatus
+        ]
         relationshipState.properties = [
             stateId,
             stateOwnerEntityName,
@@ -166,9 +222,10 @@ public final class CoreDataStack {
 
         project.uniquenessConstraints = [["id"]]
         task.uniquenessConstraints = [["id"]]
+        pendingTaskChange.uniquenessConstraints = [["id"]]
         relationshipState.uniquenessConstraints = [["id"]]
 
-        model.entities = [project, task, relationshipState]
+        model.entities = [project, task, pendingTaskChange, relationshipState]
         return model
     }
 
@@ -215,6 +272,18 @@ public extension CDTask {
     static func fetchRequestSortedByTitle() -> NSFetchRequest<CDTask> {
         let request = fetchRequest()
         request.sortDescriptors = [NSSortDescriptor(key: "title", ascending: true)]
+        return request
+    }
+}
+
+public extension CDPendingTaskChange {
+    static func fetchRequest() -> NSFetchRequest<CDPendingTaskChange> {
+        NSFetchRequest<CDPendingTaskChange>(entityName: "CDPendingTaskChange")
+    }
+
+    static func fetchRequestSortedByUpdatedAt() -> NSFetchRequest<CDPendingTaskChange> {
+        let request = fetchRequest()
+        request.sortDescriptors = [NSSortDescriptor(key: "updatedAt", ascending: true)]
         return request
     }
 }

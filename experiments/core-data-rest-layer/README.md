@@ -93,7 +93,7 @@ Plan: `docs/plans/2026-05-22-core-data-rest-layer-first-spike-plan.md`.
 - `docs/HANDOFF.md` — current state and exact next action.
 - `docs/initial-questions.md` — question bank.
 - `Package.swift` — Swift package harness.
-- `Sources/CoreDataRESTLayer/` — REST models/client, API/model version mapping, programmatic Core Data model, projection sync, and `RESTIncrementalStore` with explicit task-detail loading.
+- `Sources/CoreDataRESTLayer/` — REST models/client, API/model version mapping, programmatic Core Data model, projection sync, and `RESTIncrementalStore` with explicit task-detail loading and pending task-change staging.
 - `Sources/CoreDataRESTLayerTestServer/` — embedded deterministic HTTP server for tests.
 - `Tests/CoreDataRESTLayerTests/` — acceptance tests for sync/edit/push/conflict flows.
 - `todos/` — local task breakdown.
@@ -125,6 +125,7 @@ The test harness starts an embedded REST server on `127.0.0.1:0`. The current me
 - Detail-only scalar fields should load through explicit refresh APIs (`RESTCoreDataStack.loadTaskDetails(for:)`), not hidden property access that performs synchronous network work.
 - Synthesis verdict: Core Data stays useful as an object graph and unit-of-work API, but REST loading/completeness/conflict state must remain explicit.
 - 2026-05-25 implementation review recommends parking as a successful spike unless the next phase focuses on production ergonomics: pending changes, structured metadata, cancellation, and fail-fast supported Core Data surface area.
+- Pending-change semantics are cleaner when `CDTask` remains the last accepted remote snapshot and `CDPendingTaskChange` carries local write intent plus retry/conflict lifecycle.
 - Keep API version, local Core Data model version, and per-resource optimistic concurrency version separate.
 
 ## Next Ideas
@@ -137,7 +138,7 @@ The test harness starts an embedded REST server on `127.0.0.1:0`. The current me
 - [x] Later: simulate latency and pagination.
 - [x] Explore partial object/field loading semantics in the custom-store path.
 - [x] Write down which Core Data features remain pleasant over REST in more detail.
-- [ ] Spike pending-change semantics for task updates.
+- [x] Spike pending-change semantics for task updates.
 
 ## Cleanup / Graduation
 
