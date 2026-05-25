@@ -78,7 +78,7 @@ Root todos track repo-level or cross-experiment work only. Experiment-specific w
 
 ## Likely Next Actions
 
-1. Choose/open the next `core-data-rest-layer` todo; pending-change semantics (`009`) is done.
+1. Choose/open the next `core-data-rest-layer` todo; pending-change semantics (`009`) and cancellation/timeouts (`010`) are done.
 2. Keep root handoff minimal; update experiment-local handoff with implementation details.
 3. Decide later whether `experiments/README.md` should stay a manual catalog, become generated, or both.
 

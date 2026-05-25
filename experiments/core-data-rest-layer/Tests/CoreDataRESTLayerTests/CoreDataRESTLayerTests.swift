@@ -174,6 +174,30 @@ final class CoreDataRESTLayerTests: XCTestCase {
         XCTAssertEqual(server.requestCount(forPath: "/tasks/\(fixture.firstTaskID.uuidString)"), 1)
     }
 
+    func testRESTIncrementalStoreConfiguredTimeoutTurnsSlowFetchIntoTypedFailure() throws {
+        let fixture = Fixture.make()
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+        server.setLatency(0.25, forPathPrefix: "/projects")
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL, requestTimeout: 0.05)
+        let start = Date()
+
+        XCTAssertThrowsError(try stack.context.fetch(CDProject.fetchRequestSortedByName())) { error in
+            guard case RESTIncrementalStoreError.requestTimedOut(let timeout) = error else {
+                return XCTFail("Expected RESTIncrementalStoreError.requestTimedOut, got \(error)")
+            }
+            XCTAssertEqual(timeout, 0.05, accuracy: 0.001)
+
+            let nsError = error as NSError
+            XCTAssertEqual(nsError.domain, RESTIncrementalStoreError.errorDomain)
+            XCTAssertEqual(nsError.code, RESTIncrementalStoreError.requestTimedOut(0).errorCode)
+            XCTAssertEqual(nsError.userInfo["TimeoutSeconds"] as? TimeInterval, 0.05)
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(start), 0.2)
+    }
+
     func testRESTIncrementalStoreFetchHTTPErrorThrowsTypedStatus() throws {
         let fixture = Fixture.make()
         let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)

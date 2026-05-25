@@ -11,6 +11,7 @@ public enum RESTIncrementalStoreError: Error, CustomStringConvertible, CustomNSE
     case unsupportedSaveShape(entity: String?, operation: String)
     case invalidResponse
     case httpStatus(Int, String)
+    case requestTimedOut(TimeInterval)
     case conflict(remote: RemoteTask)
 
     public static var errorDomain: String {
@@ -29,6 +30,7 @@ public enum RESTIncrementalStoreError: Error, CustomStringConvertible, CustomNSE
         case .invalidResponse: return 8
         case .httpStatus: return 9
         case .conflict: return 10
+        case .requestTimedOut: return 11
         }
     }
 
@@ -38,6 +40,8 @@ public enum RESTIncrementalStoreError: Error, CustomStringConvertible, CustomNSE
         case let .httpStatus(status, body):
             userInfo["HTTPStatusCode"] = status
             userInfo["ResponseBody"] = body
+        case let .requestTimedOut(timeout):
+            userInfo["TimeoutSeconds"] = timeout
         case let .conflict(remote):
             userInfo["RemoteTaskID"] = remote.id.uuidString
             userInfo["RemoteVersion"] = remote.version
@@ -89,6 +93,8 @@ public enum RESTIncrementalStoreError: Error, CustomStringConvertible, CustomNSE
             return "Invalid HTTP response"
         case let .httpStatus(status, body):
             return "HTTP \(status): \(body)"
+        case let .requestTimedOut(timeout):
+            return "REST request timed out after \(timeout) seconds"
         case let .conflict(remote):
             return "Conflict with remote task \(remote.id) at version \(remote.version)"
         }
@@ -105,7 +111,11 @@ public final class RESTCoreDataStack {
     public let coordinator: NSPersistentStoreCoordinator
     public let context: NSManagedObjectContext
 
-    public init(baseURL: URL, taskPagination: TaskPaginationStrategy = .none) throws {
+    public init(
+        baseURL: URL,
+        taskPagination: TaskPaginationStrategy = .none,
+        requestTimeout: TimeInterval? = nil
+    ) throws {
         RESTIncrementalStore.registerStoreClass()
 
         coordinator = NSPersistentStoreCoordinator(managedObjectModel: CoreDataStack.makeModel())
@@ -114,7 +124,11 @@ public final class RESTCoreDataStack {
             configurationName: nil,
             at: URL(fileURLWithPath: NSTemporaryDirectory())
                 .appendingPathComponent("CoreDataRESTLayer-\(UUID().uuidString).rest"),
-            options: RESTIncrementalStore.options(baseURL: baseURL, taskPagination: taskPagination)
+            options: RESTIncrementalStore.options(
+                baseURL: baseURL,
+                taskPagination: taskPagination,
+                requestTimeout: requestTimeout
+            )
         )
 
         context = NSManagedObjectContext(concurrencyType: .mainQueueConcurrencyType)
@@ -185,6 +199,7 @@ public final class RESTIncrementalStore: NSIncrementalStore {
     public static let baseURLOptionKey = "CoreDataRESTLayer.RESTIncrementalStore.baseURL"
     public static let taskPaginationModeOptionKey = "CoreDataRESTLayer.RESTIncrementalStore.taskPaginationMode"
     public static let taskPaginationLimitOptionKey = "CoreDataRESTLayer.RESTIncrementalStore.taskPaginationLimit"
+    public static let requestTimeoutOptionKey = "CoreDataRESTLayer.RESTIncrementalStore.requestTimeout"
 
     private var client: BlockingRESTClient?
     private var taskPagination: TaskPaginationStrategy = .none
@@ -200,8 +215,15 @@ public final class RESTIncrementalStore: NSIncrementalStore {
         NSPersistentStoreCoordinator.registerStoreClass(Self.self, forStoreType: storeType)
     }
 
-    public static func options(baseURL: URL, taskPagination: TaskPaginationStrategy = .none) -> [AnyHashable: Any] {
+    public static func options(
+        baseURL: URL,
+        taskPagination: TaskPaginationStrategy = .none,
+        requestTimeout: TimeInterval? = nil
+    ) -> [AnyHashable: Any] {
         var options: [AnyHashable: Any] = [baseURLOptionKey: baseURL.absoluteString]
+        if let requestTimeout {
+            options[requestTimeoutOptionKey] = requestTimeout
+        }
         switch taskPagination {
         case .none:
             options[taskPaginationModeOptionKey] = "none"
@@ -224,7 +246,7 @@ public final class RESTIncrementalStore: NSIncrementalStore {
             throw RESTIncrementalStoreError.missingBaseURL
         }
 
-        client = BlockingRESTClient(baseURL: baseURL)
+        client = BlockingRESTClient(baseURL: baseURL, requestTimeout: Self.requestTimeout(from: options))
         taskPagination = Self.paginationStrategy(from: options)
         metadata = [
             NSStoreTypeKey: Self.storeType,
@@ -839,6 +861,19 @@ public final class RESTIncrementalStore: NSIncrementalStore {
         return client
     }
 
+    private static func requestTimeout(from options: [AnyHashable: Any]?) -> TimeInterval? {
+        guard let value = options?[requestTimeoutOptionKey] else {
+            return nil
+        }
+        if let timeout = value as? TimeInterval, timeout > 0 {
+            return timeout
+        }
+        if let timeout = value as? NSNumber, timeout.doubleValue > 0 {
+            return timeout.doubleValue
+        }
+        return nil
+    }
+
     private static func paginationStrategy(from options: [AnyHashable: Any]?) -> TaskPaginationStrategy {
         let mode = options?[taskPaginationModeOptionKey] as? String ?? "none"
         let limit = options?[taskPaginationLimitOptionKey] as? Int ?? 0
@@ -1037,10 +1072,12 @@ private struct RemoteRelationshipStateSnapshot {
 
 private final class BlockingRESTClient {
     private let baseURL: URL
+    private let requestTimeout: TimeInterval?
     private let decoder = JSONCoding.makeDecoder()
 
-    init(baseURL: URL) {
+    init(baseURL: URL, requestTimeout: TimeInterval?) {
         self.baseURL = baseURL
+        self.requestTimeout = requestTimeout
     }
 
     func fetchProjects() throws -> [RemoteProject] {
@@ -1163,20 +1200,35 @@ private final class BlockingRESTClient {
         }
 
         let semaphore = DispatchSemaphore(value: 0)
+        let resultLock = NSLock()
         var result: Result<(Data, URLResponse), Error>!
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            if let error {
-                result = .failure(error)
-            } else if let data, let response {
-                result = .success((data, response))
-            } else {
-                result = .failure(RESTIncrementalStoreError.invalidResponse)
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            resultLock.withLock {
+                if let error {
+                    result = .failure(error)
+                } else if let data, let response {
+                    result = .success((data, response))
+                } else {
+                    result = .failure(RESTIncrementalStoreError.invalidResponse)
+                }
             }
             semaphore.signal()
-        }.resume()
-        semaphore.wait()
+        }
+        task.resume()
 
-        let (data, response) = try result.get()
+        if let requestTimeout {
+            if semaphore.wait(timeout: .now() + requestTimeout) == .timedOut {
+                task.cancel()
+                throw RESTIncrementalStoreError.requestTimedOut(requestTimeout)
+            }
+        } else {
+            semaphore.wait()
+        }
+
+        guard let completedResult = resultLock.withLock({ result }) else {
+            throw RESTIncrementalStoreError.invalidResponse
+        }
+        let (data, response) = try completedResult.get()
         guard let httpResponse = response as? HTTPURLResponse else {
             throw RESTIncrementalStoreError.invalidResponse
         }
