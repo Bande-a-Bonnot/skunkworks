@@ -12,13 +12,15 @@ cd experiments/vision-pro-4d-raytracer
 swift run FourDRayProbe
 ```
 
-Current output:
+Current outputs:
 
 ```text
 tmp/four-d-ray-probe-ana-mid-slice.ppm
+tmp/four-d-ray-probe-ana-contact-sheet.ppm
+tmp/four-d-ray-probe-volume-point-cloud.ply
 ```
 
-The full GPU target is a `64 x 64 x 32` `rgba8Unorm` 3D texture. The executable reads it back and writes the middle `ana` slice as a quick PPM debug artifact.
+The full GPU target is a `64 x 64 x 32` `rgba8Unorm` 3D texture. The executable reads it back and writes the middle `ana` slice, an 8-slice contact sheet, and a PLY point cloud for spatial inspection.
 
 ## Kernel Shape
 
@@ -58,4 +60,4 @@ Observed Metal device: `Apple Paravirtual device`.
 ## Notes
 
 - The shader currently lives as a Swift raw string for fast iteration. Move it to a `.metal` file when the project shape stabilizes.
-- The output is not a Vision Pro viewer yet; it is the first GPU-generated 3D volume/probe artifact.
+- The output is not a native Vision Pro viewer yet; it is the first GPU-generated 3D volume/probe artifact plus a simple spatial export path.

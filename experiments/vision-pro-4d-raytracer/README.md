@@ -4,7 +4,7 @@
 
 ## Status
 
-`spike` — CPU-side 4D math checks and a minimal Metal compute volume probe are working; no Vision Pro viewer yet.
+`spike` — CPU-side 4D math checks, a Metal compute volume probe, and first volume inspection exports are working; no native Vision Pro app yet.
 
 ## Why
 
@@ -36,10 +36,12 @@ swift test
 swift run FourDRayProbe
 ```
 
-The probe writes a debug slice to:
+The probe writes inspection artifacts to:
 
 ```text
 tmp/four-d-ray-probe-ana-mid-slice.ppm
+tmp/four-d-ray-probe-ana-contact-sheet.ppm
+tmp/four-d-ray-probe-volume-point-cloud.ply
 ```
 
 Inspect the active docs:
@@ -48,6 +50,7 @@ Inspect the active docs:
 open docs/HANDOFF.md
 open docs/solutions/2026-05-26-camera-projection-model.md
 open docs/solutions/2026-05-28-metal-probe-findings.md
+open docs/solutions/2026-05-28-volume-inspection-path.md
 ```
 
 ## Local Docs
@@ -57,6 +60,7 @@ open docs/solutions/2026-05-28-metal-probe-findings.md
 - `docs/plans/2026-05-26-first-spike-plan.md` — first spike plan.
 - `docs/solutions/2026-05-26-camera-projection-model.md` — v0 camera/projection decision and formulas.
 - `docs/solutions/2026-05-28-metal-probe-findings.md` — first Metal compute probe notes.
+- `docs/solutions/2026-05-28-volume-inspection-path.md` — contact sheet / point-cloud inspection path.
 - `todos/` — local task records.
 
 ## Notes / Findings
@@ -74,7 +78,8 @@ Working assumptions for the first spike:
 - [x] Define the 4D camera/projection model before building UI.
 - [x] Prototype CPU-side intersection math for hypersphere + hyperplane.
 - [x] Port the minimal kernel to Metal compute.
-- [ ] Build a Vision Pro/spatial viewer for the 3D projection volume.
+- [x] Export a spatial point-cloud representation for the 3D projection volume.
+- [ ] Build a native Vision Pro/spatial viewer for the 3D projection volume.
 
 ## Cleanup / Graduation
 

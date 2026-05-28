@@ -1,7 +1,7 @@
 # First Spike Plan: 4D Metal Raytracer for Vision Pro
 
 **Date:** 2026-05-26  
-**Status:** in progress — CPU math and first Metal probe are implemented; Vision Pro viewer remains
+**Status:** in progress — CPU math, Metal probe, and volume export inspection path are implemented; native Vision Pro viewer remains
 
 ## Goal
 
@@ -77,9 +77,10 @@ Build a 3D proxy representation from 4D intersections, then render the proxy per
 2. **Metal compute toy** ✅
    - One kernel, `float4` ray state, small primitive array.
    - Write normal/debug color to a texture or 3D texture.
-3. **Projection viewer**
+3. **Projection viewer** ✅ / stepping stone
    - macOS/SwiftUI viewer first if faster, or visionOS if project setup is easy.
    - Keep the output format swappable.
+   - Current path exports an `ana` contact sheet and PLY point cloud from the Metal 3D texture.
 4. **Vision Pro binocular mode**
    - Use per-eye transforms or RealityKit stereo presentation.
    - Document simulator vs hardware verification.
@@ -103,3 +104,8 @@ Metal probe delivered in:
 
 - `Sources/FourDRayProbe/main.swift`
 - `docs/solutions/2026-05-28-metal-probe-findings.md`
+
+Volume inspection path delivered in:
+
+- `Sources/FourDRayProbe/main.swift`
+- `docs/solutions/2026-05-28-volume-inspection-path.md`

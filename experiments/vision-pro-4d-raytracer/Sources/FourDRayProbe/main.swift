@@ -63,13 +63,20 @@ struct FourDRayProbe {
         }
 
         let bytes = readTexture(texture)
-        let outputURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let outputDirectory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appending(path: "tmp", directoryHint: .isDirectory)
-            .appending(path: "four-d-ray-probe-ana-mid-slice.ppm")
-        try writePPM(bytes: bytes, slice: depth / 2, outputURL: outputURL)
+        let middleSliceURL = outputDirectory.appending(path: "four-d-ray-probe-ana-mid-slice.ppm")
+        let contactSheetURL = outputDirectory.appending(path: "four-d-ray-probe-ana-contact-sheet.ppm")
+        let pointCloudURL = outputDirectory.appending(path: "four-d-ray-probe-volume-point-cloud.ply")
+
+        try writeSlicePPM(bytes: bytes, slice: depth / 2, outputURL: middleSliceURL)
+        try writeContactSheetPPM(bytes: bytes, sliceCount: 8, columns: 4, outputURL: contactSheetURL)
+        let pointCount = try writePointCloudPLY(bytes: bytes, outputURL: pointCloudURL)
 
         print("Rendered \(width)x\(height)x\(depth) 4D-projected volume on \(device.name)")
-        print("Wrote middle ana slice: \(outputURL.path)")
+        print("Wrote middle ana slice: \(middleSliceURL.path)")
+        print("Wrote ana contact sheet: \(contactSheetURL.path)")
+        print("Wrote volume point cloud: \(pointCloudURL.path) (\(pointCount) vertices)")
     }
 }
 
@@ -98,28 +105,118 @@ private func readTexture(_ texture: MTLTexture) -> [UInt8] {
     return bytes
 }
 
-private func writePPM(bytes: [UInt8], slice: Int, outputURL: URL) throws {
-    try FileManager.default.createDirectory(
-        at: outputURL.deletingLastPathComponent(),
-        withIntermediateDirectories: true
-    )
-
-    let bytesPerPixel = 4
-    let bytesPerRow = width * bytesPerPixel
-    let bytesPerImage = bytesPerRow * height
-    let sliceBase = bytesPerImage * slice
+private func writeSlicePPM(bytes: [UInt8], slice: Int, outputURL: URL) throws {
+    try createOutputDirectory(for: outputURL)
 
     var output = Data("P6\n\(width) \(height)\n255\n".utf8)
     for y in 0..<height {
         for x in 0..<width {
-            let index = sliceBase + y * bytesPerRow + x * bytesPerPixel
-            output.append(bytes[index])
-            output.append(bytes[index + 1])
-            output.append(bytes[index + 2])
+            appendRGB(from: bytes, x: x, y: y, z: slice, to: &output)
         }
     }
 
     try output.write(to: outputURL)
+}
+
+private func writeContactSheetPPM(bytes: [UInt8], sliceCount: Int, columns: Int, outputURL: URL) throws {
+    try createOutputDirectory(for: outputURL)
+
+    let slices = evenlySpacedSlices(count: sliceCount)
+    let rows = Int(ceil(Double(slices.count) / Double(columns)))
+    let sheetWidth = columns * width
+    let sheetHeight = rows * height
+
+    var output = Data("P6\n\(sheetWidth) \(sheetHeight)\n255\n".utf8)
+    for sheetY in 0..<sheetHeight {
+        let row = sheetY / height
+        let localY = sheetY % height
+        for sheetX in 0..<sheetWidth {
+            let column = sheetX / width
+            let localX = sheetX % width
+            let sliceIndex = row * columns + column
+            guard sliceIndex < slices.count else {
+                output.append(0)
+                output.append(0)
+                output.append(0)
+                continue
+            }
+            appendRGB(from: bytes, x: localX, y: localY, z: slices[sliceIndex], to: &output)
+        }
+    }
+
+    try output.write(to: outputURL)
+}
+
+@discardableResult
+private func writePointCloudPLY(bytes: [UInt8], outputURL: URL) throws -> Int {
+    try createOutputDirectory(for: outputURL)
+
+    let pointCount = width * height * depth
+    var output = """
+    ply
+    format ascii 1.0
+    comment FourDRayProbe 4D-to-3D projection volume. Coordinates are u, v, ana.
+    element vertex \(pointCount)
+    property float x
+    property float y
+    property float z
+    property uchar red
+    property uchar green
+    property uchar blue
+    end_header
+
+    """
+
+    output.reserveCapacity(pointCount * 42)
+
+    for z in 0..<depth {
+        let ana = normalizedCoordinate(index: z, count: depth)
+        for y in 0..<height {
+            // Flip image y so positive PLY y is visually up.
+            let v = -normalizedCoordinate(index: y, count: height)
+            for x in 0..<width {
+                let u = normalizedCoordinate(index: x, count: width)
+                let index = pixelIndex(x: x, y: y, z: z)
+                output += "\(u) \(v) \(ana) \(bytes[index]) \(bytes[index + 1]) \(bytes[index + 2])\n"
+            }
+        }
+    }
+
+    try output.write(to: outputURL, atomically: true, encoding: .utf8)
+    return pointCount
+}
+
+private func evenlySpacedSlices(count: Int) -> [Int] {
+    precondition(count > 0)
+    guard count > 1 else { return [depth / 2] }
+    return (0..<count).map { index in
+        Int(round(Float(index) * Float(depth - 1) / Float(count - 1)))
+    }
+}
+
+private func normalizedCoordinate(index: Int, count: Int) -> Float {
+    ((Float(index) + 0.5) / Float(count)) * 2 - 1
+}
+
+private func appendRGB(from bytes: [UInt8], x: Int, y: Int, z: Int, to output: inout Data) {
+    let index = pixelIndex(x: x, y: y, z: z)
+    output.append(bytes[index])
+    output.append(bytes[index + 1])
+    output.append(bytes[index + 2])
+}
+
+private func pixelIndex(x: Int, y: Int, z: Int) -> Int {
+    let bytesPerPixel = 4
+    let bytesPerRow = width * bytesPerPixel
+    let bytesPerImage = bytesPerRow * height
+    return bytesPerImage * z + bytesPerRow * y + bytesPerPixel * x
+}
+
+private func createOutputDirectory(for outputURL: URL) throws {
+    try FileManager.default.createDirectory(
+        at: outputURL.deletingLastPathComponent(),
+        withIntermediateDirectories: true
+    )
 }
 
 private let metalSource = #"""

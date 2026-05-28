@@ -1,5 +1,5 @@
 ---
-status: ready
+status: done
 priority: p1
 issue_id: "003"
 tags: [experiment, visionos, metal, viewer]
@@ -7,6 +7,8 @@ dependencies: ["002"]
 ---
 
 # Build first Vision Pro volume viewer path
+
+Done 2026-05-28 as a stepping-stone inspection/export path in `FourDRayProbe`: multi-`ana` contact sheet plus PLY point-cloud export. Native Vision Pro app work moves to todo `004`.
 
 ## Goal
 
