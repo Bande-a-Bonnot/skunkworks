@@ -4,7 +4,7 @@
 
 ## Status
 
-`idea` — scaffolded with math/rendering questions; no runnable artifact yet.
+`spike` — scaffolded with CPU-side 4D ray/intersection/reflection checks; no Metal or visionOS target yet.
 
 ## Why
 
@@ -28,13 +28,18 @@ Initial target: a Metal compute prototype that traces 4D rays against simple imp
 
 ## Quick Start
 
-No runnable artifact yet.
-
-Inspect the plan and handoff:
+Run the CPU math checks:
 
 ```bash
-open experiments/vision-pro-4d-raytracer/docs/HANDOFF.md
-open experiments/vision-pro-4d-raytracer/docs/plans/2026-05-26-first-spike-plan.md
+cd experiments/vision-pro-4d-raytracer
+swift test
+```
+
+Inspect the active docs:
+
+```bash
+open docs/HANDOFF.md
+open docs/solutions/2026-05-26-camera-projection-model.md
 ```
 
 ## Local Docs
@@ -42,6 +47,7 @@ open experiments/vision-pro-4d-raytracer/docs/plans/2026-05-26-first-spike-plan.
 - `AGENTS.md` — local agent instructions.
 - `docs/HANDOFF.md` — current state and next action.
 - `docs/plans/2026-05-26-first-spike-plan.md` — first spike plan.
+- `docs/solutions/2026-05-26-camera-projection-model.md` — v0 camera/projection decision and formulas.
 - `todos/` — local task records.
 
 ## Notes / Findings
@@ -56,10 +62,10 @@ Working assumptions for the first spike:
 
 ## Next Ideas
 
-- [ ] Define the 4D camera/projection model before building UI.
-- [ ] Prototype CPU-side intersection math for hypersphere + hyperplane.
+- [x] Define the 4D camera/projection model before building UI.
+- [x] Prototype CPU-side intersection math for hypersphere + hyperplane.
 - [ ] Port the minimal kernel to Metal compute.
-- [ ] Decide whether first Vision Pro output is a 3D volume, a point cloud/surface, or direct stereo textures.
+- [ ] Build a 3D texture/volume output path for Vision Pro inspection.
 
 ## Cleanup / Graduation
 

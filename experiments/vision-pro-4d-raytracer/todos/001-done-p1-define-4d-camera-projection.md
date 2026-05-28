@@ -1,5 +1,5 @@
 ---
-status: ready
+status: done
 priority: p1
 issue_id: "001"
 tags: [experiment, math, metal, visionos]
@@ -7,6 +7,8 @@ dependencies: []
 ---
 
 # Define 4D camera and projection model
+
+Done 2026-05-26 in `docs/solutions/2026-05-26-camera-projection-model.md`, `Sources/FourDRayCore/FourDRayCore.swift`, and `Tests/FourDRayCoreTests/FourDRayCoreTests.swift`.
 
 ## Goal
 

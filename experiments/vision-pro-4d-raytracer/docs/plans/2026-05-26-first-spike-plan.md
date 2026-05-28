@@ -1,7 +1,7 @@
 # First Spike Plan: 4D Metal Raytracer for Vision Pro
 
 **Date:** 2026-05-26  
-**Status:** draft
+**Status:** in progress — camera/projection v0 and CPU math checks are implemented
 
 ## Goal
 
@@ -70,7 +70,7 @@ Build a 3D proxy representation from 4D intersections, then render the proxy per
 
 ## Suggested Milestones
 
-1. **Math note / CPU checks**
+1. **Math note / CPU checks** ✅
    - Define camera basis.
    - Unit-test hypersphere intersection.
    - Unit-test 4D reflection preserves direction length and flips normal component.
@@ -92,3 +92,9 @@ A short design note plus CPU test harness that answers:
 - Given one eye pose, how is a 4D ray generated?
 - How is binocular separation represented in 4D?
 - What is the first output artifact Metal writes?
+
+Delivered in:
+
+- `docs/solutions/2026-05-26-camera-projection-model.md`
+- `Sources/FourDRayCore/FourDRayCore.swift`
+- `Tests/FourDRayCoreTests/FourDRayCoreTests.swift`

@@ -1,7 +1,7 @@
 # Vision Pro 4D Raytracer Handoff
 
 **URN:** `skunkworks::local::experiment::vision-pro-4d-raytracer::handoff::019e6610-a6d0-7318-8de1-0abc7727b861`  
-**Last updated:** 2026-05-26  
+**Last updated:** 2026-05-28  
 **Update this before context compaction or at the end of meaningful sessions.**
 
 Read this after `AGENTS.md` when working on this experiment.
@@ -14,25 +14,26 @@ Explore a 4D raytracer where rays, surfaces, normals, lighting, and reflection o
 
 ## Current State
 
-- Scaffolded as an `idea` experiment.
-- No runnable code yet.
-- Local plan exists at `docs/plans/2026-05-26-first-spike-plan.md`.
-- First todo is ready: define the camera/projection model and CPU-check the core 4D math.
+- `spike` experiment.
+- Swift package exists with CPU-side 4D ray, primitive, reflection, and camera checks.
+- Camera/projection model v0 is documented in `docs/solutions/2026-05-26-camera-projection-model.md`.
+- First todo (`001`) is done; next ready todo is `002`, the minimal Metal compute port.
 
 ## Working Direction
 
-Start with math and representation, then build the smallest Metal-backed proof.
+Build the smallest Metal-backed proof from the validated CPU model.
 
 Candidate first visible demo:
 
 1. Scene: hypersphere plus one or two hyperplanes in 4D.
 2. Ray model: `origin4 + t * direction4` with 4D-normalized directions.
 3. Shading: normal visualization and one-bounce mirror reflection using 4D dot products.
-4. Output: either a 3D texture/volume for stereoscopic inspection or direct per-eye render targets.
+4. Output: preferably a 3D texture/volume over `(u, v, ana)` for stereoscopic inspection on Vision Pro.
 
 ## Local Todos
 
-- `001` — `todos/001-ready-p1-define-4d-camera-projection.md`
+- `001` — `todos/001-done-p1-define-4d-camera-projection.md` — done.
+- `002` — `todos/002-ready-p1-port-cpu-core-to-metal.md` — ready.
 
 ## Open Questions
 
@@ -43,8 +44,14 @@ Candidate first visible demo:
 
 ## Verification
 
-No code exists yet. Current verification is structural/document review only.
+Run from this experiment directory:
+
+```bash
+swift test
+```
+
+Expected: `FourDRayCoreTests` passes.
 
 ## Next Action
 
-Work `todos/001-ready-p1-define-4d-camera-projection.md`: write down the camera/projection choice, derive the first ray generation formulas, and CPU-check hypersphere intersection plus 4D reflection before creating a Metal/visionOS project.
+Work `todos/002-ready-p1-port-cpu-core-to-metal.md`: port the CPU core to a minimal Metal compute kernel that writes a first 3D projected radiance volume or a temporary 2D debug texture.
