@@ -1,0 +1,8 @@
+# Local/generated artifacts for this experiment
+DerivedData/
+.build/
+build/
+dist/
+tmp/
+*.xcuserdata/
+*.xcuserstate

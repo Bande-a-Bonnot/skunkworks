@@ -6,6 +6,7 @@ One directory per experiment. Keep experiments self-contained and documented eno
 
 | Slug | Status | Description |
 |------|--------|-------------|
+| `vision-pro-4d-raytracer` | idea | Explore a Metal 4D raytracer with 4D bounces, 3D projection, and a binocular Vision Pro camera. |
 | `core-data-rest-layer` | idea | Explore Core Data as an object graph/change-tracking layer over REST APIs instead of local/CloudKit persistence. |
 | `core-data-graph-db` | spike | Implements graph primitives, BFS, Dijkstra, and benchmarks over Core Data managed objects vs snapshots. |
 | `_template` | template | Copyable starter for new experiments. |
