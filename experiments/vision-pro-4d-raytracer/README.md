@@ -4,7 +4,7 @@
 
 ## Status
 
-`spike` — CPU-side 4D math checks, a Metal compute volume probe, and first volume inspection exports are working; no native Vision Pro app yet.
+`spike` — CPU-side 4D math checks, a Metal compute volume probe, volume inspection exports, and a visionOS RealityKit point-cloud prototype path are working; no simulator/device app-bundle run yet.
 
 ## Why
 
@@ -28,12 +28,13 @@ Initial target: a Metal compute prototype that traces 4D rays against simple imp
 
 ## Quick Start
 
-Run the CPU math checks and the Metal probe:
+Run the CPU math checks, Metal probe, and host fallback for the visionOS viewer target:
 
 ```bash
 cd experiments/vision-pro-4d-raytracer
 swift test
 swift run FourDRayProbe
+swift run FourDRayVisionViewer
 ```
 
 The probe writes inspection artifacts to:
@@ -42,6 +43,20 @@ The probe writes inspection artifacts to:
 tmp/four-d-ray-probe-ana-mid-slice.ppm
 tmp/four-d-ray-probe-ana-contact-sheet.ppm
 tmp/four-d-ray-probe-volume-point-cloud.ply
+```
+
+Type-check the visionOS RealityKit prototype against the XR simulator SDK:
+
+```bash
+SDK=$(xcrun --sdk xrsimulator --show-sdk-path)
+mkdir -p tmp/vision-compile-check
+xcrun swiftc \
+  -target arm64-apple-xros2.0-simulator \
+  -sdk "$SDK" \
+  -parse-as-library \
+  Sources/FourDRayVisionViewer/PointCloudSample.swift \
+  Sources/FourDRayVisionViewer/FourDRayVisionViewerApp.swift \
+  -o tmp/vision-compile-check/FourDRayVisionViewer
 ```
 
 Inspect the active docs:
@@ -61,6 +76,7 @@ open docs/solutions/2026-05-28-volume-inspection-path.md
 - `docs/solutions/2026-05-26-camera-projection-model.md` — v0 camera/projection decision and formulas.
 - `docs/solutions/2026-05-28-metal-probe-findings.md` — first Metal compute probe notes.
 - `docs/solutions/2026-05-28-volume-inspection-path.md` — contact sheet / point-cloud inspection path.
+- `docs/solutions/2026-05-28-visionos-viewer-prototype.md` — first RealityKit/visionOS viewer prototype notes.
 - `todos/` — local task records.
 
 ## Notes / Findings
@@ -79,7 +95,8 @@ Working assumptions for the first spike:
 - [x] Prototype CPU-side intersection math for hypersphere + hyperplane.
 - [x] Port the minimal kernel to Metal compute.
 - [x] Export a spatial point-cloud representation for the 3D projection volume.
-- [ ] Build a native Vision Pro/spatial viewer for the 3D projection volume.
+- [x] Build a native Vision Pro/spatial viewer prototype for the 3D projection volume.
+- [ ] Wrap the viewer in a simulator/device-verified visionOS app bundle.
 
 ## Cleanup / Graduation
 

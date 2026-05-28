@@ -10,11 +10,13 @@ let package = Package(
     ],
     products: [
         .library(name: "FourDRayCore", targets: ["FourDRayCore"]),
-        .executable(name: "FourDRayProbe", targets: ["FourDRayProbe"])
+        .executable(name: "FourDRayProbe", targets: ["FourDRayProbe"]),
+        .executable(name: "FourDRayVisionViewer", targets: ["FourDRayVisionViewer"])
     ],
     targets: [
         .target(name: "FourDRayCore"),
         .executableTarget(name: "FourDRayProbe"),
+        .executableTarget(name: "FourDRayVisionViewer"),
         .testTarget(name: "FourDRayCoreTests", dependencies: ["FourDRayCore"])
     ]
 )

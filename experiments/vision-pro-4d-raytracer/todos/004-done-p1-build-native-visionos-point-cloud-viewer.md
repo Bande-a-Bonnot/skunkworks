@@ -1,5 +1,5 @@
 ---
-status: ready
+status: done
 priority: p1
 issue_id: "004"
 tags: [experiment, visionos, realitykit, viewer]
@@ -7,6 +7,8 @@ dependencies: ["003"]
 ---
 
 # Build native visionOS point-cloud viewer
+
+Done 2026-05-28 as a SwiftPM/RealityKit prototype path in `Sources/FourDRayVisionViewer/`. Simulator/device app-bundle verification moves to todo `005`.
 
 ## Goal
 
