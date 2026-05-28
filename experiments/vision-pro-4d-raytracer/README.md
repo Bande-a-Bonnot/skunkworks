@@ -4,7 +4,7 @@
 
 ## Status
 
-`spike` — scaffolded with CPU-side 4D ray/intersection/reflection checks; no Metal or visionOS target yet.
+`spike` — CPU-side 4D math checks and a minimal Metal compute volume probe are working; no Vision Pro viewer yet.
 
 ## Why
 
@@ -28,11 +28,18 @@ Initial target: a Metal compute prototype that traces 4D rays against simple imp
 
 ## Quick Start
 
-Run the CPU math checks:
+Run the CPU math checks and the Metal probe:
 
 ```bash
 cd experiments/vision-pro-4d-raytracer
 swift test
+swift run FourDRayProbe
+```
+
+The probe writes a debug slice to:
+
+```text
+tmp/four-d-ray-probe-ana-mid-slice.ppm
 ```
 
 Inspect the active docs:
@@ -40,6 +47,7 @@ Inspect the active docs:
 ```bash
 open docs/HANDOFF.md
 open docs/solutions/2026-05-26-camera-projection-model.md
+open docs/solutions/2026-05-28-metal-probe-findings.md
 ```
 
 ## Local Docs
@@ -48,6 +56,7 @@ open docs/solutions/2026-05-26-camera-projection-model.md
 - `docs/HANDOFF.md` — current state and next action.
 - `docs/plans/2026-05-26-first-spike-plan.md` — first spike plan.
 - `docs/solutions/2026-05-26-camera-projection-model.md` — v0 camera/projection decision and formulas.
+- `docs/solutions/2026-05-28-metal-probe-findings.md` — first Metal compute probe notes.
 - `todos/` — local task records.
 
 ## Notes / Findings
@@ -64,8 +73,8 @@ Working assumptions for the first spike:
 
 - [x] Define the 4D camera/projection model before building UI.
 - [x] Prototype CPU-side intersection math for hypersphere + hyperplane.
-- [ ] Port the minimal kernel to Metal compute.
-- [ ] Build a 3D texture/volume output path for Vision Pro inspection.
+- [x] Port the minimal kernel to Metal compute.
+- [ ] Build a Vision Pro/spatial viewer for the 3D projection volume.
 
 ## Cleanup / Graduation
 

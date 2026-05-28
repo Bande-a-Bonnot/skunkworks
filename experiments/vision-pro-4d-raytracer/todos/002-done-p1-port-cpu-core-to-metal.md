@@ -1,5 +1,5 @@
 ---
-status: ready
+status: done
 priority: p1
 issue_id: "002"
 tags: [experiment, metal, rendering]
@@ -7,6 +7,8 @@ dependencies: ["001"]
 ---
 
 # Port CPU ray core to a minimal Metal compute kernel
+
+Done 2026-05-28 in `Sources/FourDRayProbe/main.swift` and `docs/solutions/2026-05-28-metal-probe-findings.md`.
 
 ## Goal
 

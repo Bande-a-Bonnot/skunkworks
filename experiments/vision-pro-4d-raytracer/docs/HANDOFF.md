@@ -16,24 +16,27 @@ Explore a 4D raytracer where rays, surfaces, normals, lighting, and reflection o
 
 - `spike` experiment.
 - Swift package exists with CPU-side 4D ray, primitive, reflection, and camera checks.
+- `FourDRayProbe` Metal executable renders a `64 x 64 x 32` 3D projected radiance volume and writes a middle-`ana` PPM debug slice.
 - Camera/projection model v0 is documented in `docs/solutions/2026-05-26-camera-projection-model.md`.
-- First todo (`001`) is done; next ready todo is `002`, the minimal Metal compute port.
+- Metal probe findings are documented in `docs/solutions/2026-05-28-metal-probe-findings.md`.
+- Todos `001` and `002` are done; next ready todo is `003`, the Vision Pro/spatial volume viewer path.
 
 ## Working Direction
 
-Build the smallest Metal-backed proof from the validated CPU model.
+Build a spatial viewer for the Metal-generated 3D projection volume.
 
-Candidate first visible demo:
+Current GPU demo:
 
 1. Scene: hypersphere plus one or two hyperplanes in 4D.
 2. Ray model: `origin4 + t * direction4` with 4D-normalized directions.
 3. Shading: normal visualization and one-bounce mirror reflection using 4D dot products.
-4. Output: preferably a 3D texture/volume over `(u, v, ana)` for stereoscopic inspection on Vision Pro.
+4. Output: 3D texture/volume over `(u, v, ana)`, currently exported as one PPM slice for debug.
 
 ## Local Todos
 
 - `001` — `todos/001-done-p1-define-4d-camera-projection.md` — done.
-- `002` — `todos/002-ready-p1-port-cpu-core-to-metal.md` — ready.
+- `002` — `todos/002-done-p1-port-cpu-core-to-metal.md` — done.
+- `003` — `todos/003-ready-p1-build-vision-pro-volume-viewer.md` — ready.
 
 ## Open Questions
 
@@ -48,10 +51,11 @@ Run from this experiment directory:
 
 ```bash
 swift test
+swift run FourDRayProbe
 ```
 
-Expected: `FourDRayCoreTests` passes.
+Expected: `FourDRayCoreTests` passes, and `FourDRayProbe` writes `tmp/four-d-ray-probe-ana-mid-slice.ppm`.
 
 ## Next Action
 
-Work `todos/002-ready-p1-port-cpu-core-to-metal.md`: port the CPU core to a minimal Metal compute kernel that writes a first 3D projected radiance volume or a temporary 2D debug texture.
+Work `todos/003-ready-p1-build-vision-pro-volume-viewer.md`: decide and implement the first spatial/visionOS viewer path for the generated 3D projection volume.

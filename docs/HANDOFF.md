@@ -49,7 +49,7 @@ Existing root `nohup.out` was present from before setup and is ignored. Do not d
 
 Active / next up:
 
-- `experiments/vision-pro-4d-raytracer/` — spike for a Metal 4D raytracer projected into a binocular Vision Pro experience; CPU camera/projection math is in place, next is Metal compute; read `experiments/vision-pro-4d-raytracer/docs/HANDOFF.md`.
+- `experiments/vision-pro-4d-raytracer/` — spike for a Metal 4D raytracer projected into a binocular Vision Pro experience; CPU camera/projection math and first Metal volume probe are in place, next is a spatial/visionOS volume viewer; read `experiments/vision-pro-4d-raytracer/docs/HANDOFF.md`.
 - `experiments/core-data-rest-layer/` — read `experiments/core-data-rest-layer/docs/HANDOFF.md`.
 
 Parked / optional follow-up:
@@ -79,7 +79,7 @@ Root todos track repo-level or cross-experiment work only. Experiment-specific w
 
 ## Likely Next Actions
 
-1. For `vision-pro-4d-raytracer`, work local todo `002`: port the CPU 4D ray/intersection/reflection core to a minimal Metal compute kernel.
+1. For `vision-pro-4d-raytracer`, work local todo `003`: build the first spatial/visionOS viewer path for the Metal-generated 3D projection volume.
 2. `core-data-rest-layer` has no ready local todo after endpoint-mapped task status predicate support (`013`) was completed.
 3. Keep root handoff minimal; update experiment-local handoff with implementation details.
 4. Decide later whether `experiments/README.md` should stay a manual catalog, become generated, or both.

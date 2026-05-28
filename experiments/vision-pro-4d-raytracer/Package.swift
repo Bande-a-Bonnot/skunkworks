@@ -9,10 +9,12 @@ let package = Package(
         .visionOS(.v2)
     ],
     products: [
-        .library(name: "FourDRayCore", targets: ["FourDRayCore"])
+        .library(name: "FourDRayCore", targets: ["FourDRayCore"]),
+        .executable(name: "FourDRayProbe", targets: ["FourDRayProbe"])
     ],
     targets: [
         .target(name: "FourDRayCore"),
+        .executableTarget(name: "FourDRayProbe"),
         .testTarget(name: "FourDRayCoreTests", dependencies: ["FourDRayCore"])
     ]
 )
