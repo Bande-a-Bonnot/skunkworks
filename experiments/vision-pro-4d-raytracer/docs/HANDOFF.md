@@ -17,12 +17,13 @@ Explore a 4D raytracer where rays, surfaces, normals, lighting, and reflection o
 - `spike` experiment.
 - Swift package exists with CPU-side 4D ray, primitive, reflection, and camera checks.
 - `FourDRayProbe` Metal executable renders a `64 x 64 x 32` 3D projected radiance volume and writes a middle-`ana` PPM slice, an 8-slice `ana` contact sheet, and a PLY point cloud.
-- `FourDRayVisionViewer` SwiftPM executable contains a visionOS SwiftUI/RealityKit volumetric point-cloud prototype plus a macOS fallback message.
+- `FourDRayVisionViewer` SwiftPM executable contains a visionOS SwiftUI/RealityKit volumetric point-cloud prototype plus a macOS fallback message; the target builds for the generic visionOS simulator destination.
 - Camera/projection model v0 is documented in `docs/solutions/2026-05-26-camera-projection-model.md`.
 - Metal probe findings are documented in `docs/solutions/2026-05-28-metal-probe-findings.md`.
 - Volume inspection/export path is documented in `docs/solutions/2026-05-28-volume-inspection-path.md`.
 - visionOS viewer prototype notes are documented in `docs/solutions/2026-05-28-visionos-viewer-prototype.md`.
-- Todos `001` through `004` are done; next ready todo is `005`, wrapping the viewer in a simulator/device-verified visionOS app bundle.
+- visionOS 26.2 simulator runtime is installed. Local simulator: `Skunkworks Vision Pro (4A3E657D-C0F0-4F5D-B041-FE556B29DFDC)`.
+- Todos `001` through `004` are done; next ready todo is `005`, wrapping the viewer in a launched/installed visionOS app bundle.
 
 ## Working Direction
 
@@ -58,6 +59,10 @@ Run from this experiment directory:
 swift test
 swift run FourDRayProbe
 swift run FourDRayVisionViewer
+xcodebuild -scheme FourDRayVisionViewer \
+  -sdk xrsimulator \
+  -destination 'generic/platform=visionOS Simulator' \
+  build
 ```
 
 Expected: `FourDRayCoreTests` passes, `FourDRayProbe` writes:
@@ -66,8 +71,8 @@ Expected: `FourDRayCoreTests` passes, `FourDRayProbe` writes:
 - `tmp/four-d-ray-probe-ana-contact-sheet.ppm`
 - `tmp/four-d-ray-probe-volume-point-cloud.ply`
 
-and `FourDRayVisionViewer` prints its macOS fallback instructions. The visionOS branch was also type-checked with direct `xcrun swiftc -target arm64-apple-xros2.0-simulator`; see `docs/solutions/2026-05-28-visionos-viewer-prototype.md`.
+`FourDRayVisionViewer` prints its macOS fallback instructions, and the Xcode visionOS simulator build succeeds. Last verified 2026-05-28 after installing the visionOS simulator runtime.
 
 ## Next Action
 
-Work `todos/005-ready-p1-wrap-viewer-in-visionos-app-bundle.md`: add a real visionOS app-bundle/project path and verify it with an installed simulator destination or physical Vision Pro hardware.
+Work `todos/005-ready-p1-wrap-viewer-in-visionos-app-bundle.md`: add a real visionOS app-bundle/project path, then install/launch it on `Skunkworks Vision Pro` or physical Vision Pro hardware.

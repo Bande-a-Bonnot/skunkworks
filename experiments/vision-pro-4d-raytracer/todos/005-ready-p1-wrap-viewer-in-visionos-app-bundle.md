@@ -24,4 +24,20 @@ Turn the `FourDRayVisionViewer` SwiftPM/RealityKit prototype into a real visionO
 
 ## Notes
 
-Current state: the visionOS SwiftUI/RealityKit code compiles via direct `swiftc` against the XR simulator SDK, but `xcodebuild` could not find an eligible visionOS destination on this machine. Installing the full visionOS platform/runtime in Xcode may be required before this can be fully verified.
+Current state: the visionOS 26.2 simulator runtime is installed, and the SwiftPM viewer executable builds for the generic visionOS simulator destination:
+
+```bash
+cd experiments/vision-pro-4d-raytracer
+xcodebuild -scheme FourDRayVisionViewer \
+  -sdk xrsimulator \
+  -destination 'generic/platform=visionOS Simulator' \
+  build
+```
+
+A local simulator exists:
+
+```text
+Skunkworks Vision Pro (4A3E657D-C0F0-4F5D-B041-FE556B29DFDC)
+```
+
+This todo remains open because the viewer is still a SwiftPM executable prototype, not a fully wrapped app bundle that has been installed/launched in the simulator.

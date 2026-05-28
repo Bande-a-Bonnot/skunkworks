@@ -4,7 +4,7 @@
 
 ## Status
 
-`spike` — CPU-side 4D math checks, a Metal compute volume probe, volume inspection exports, and a visionOS RealityKit point-cloud prototype path are working; no simulator/device app-bundle run yet.
+`spike` — CPU-side 4D math checks, a Metal compute volume probe, volume inspection exports, and a visionOS RealityKit point-cloud prototype path are working. The visionOS 26.2 simulator runtime is installed and the viewer target builds for the generic visionOS simulator; a real app-bundle run is still next.
 
 ## Why
 
@@ -45,19 +45,16 @@ tmp/four-d-ray-probe-ana-contact-sheet.ppm
 tmp/four-d-ray-probe-volume-point-cloud.ply
 ```
 
-Type-check the visionOS RealityKit prototype against the XR simulator SDK:
+Build the visionOS simulator target with Xcode:
 
 ```bash
-SDK=$(xcrun --sdk xrsimulator --show-sdk-path)
-mkdir -p tmp/vision-compile-check
-xcrun swiftc \
-  -target arm64-apple-xros2.0-simulator \
-  -sdk "$SDK" \
-  -parse-as-library \
-  Sources/FourDRayVisionViewer/PointCloudSample.swift \
-  Sources/FourDRayVisionViewer/FourDRayVisionViewerApp.swift \
-  -o tmp/vision-compile-check/FourDRayVisionViewer
+xcodebuild -scheme FourDRayVisionViewer \
+  -sdk xrsimulator \
+  -destination 'generic/platform=visionOS Simulator' \
+  build
 ```
+
+A local simulator named `Skunkworks Vision Pro` exists if a future app-bundle run needs a concrete destination.
 
 Inspect the active docs:
 

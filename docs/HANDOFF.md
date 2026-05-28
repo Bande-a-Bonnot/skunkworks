@@ -49,7 +49,7 @@ Existing root `nohup.out` was present from before setup and is ignored. Do not d
 
 Active / next up:
 
-- `experiments/vision-pro-4d-raytracer/` — spike for a Metal 4D raytracer projected into a binocular Vision Pro experience; CPU camera/projection math, Metal volume probe, contact-sheet/PLY exports, and a RealityKit visionOS viewer prototype are in place; next is a simulator/device-verified app bundle; read `experiments/vision-pro-4d-raytracer/docs/HANDOFF.md`.
+- `experiments/vision-pro-4d-raytracer/` — spike for a Metal 4D raytracer projected into a binocular Vision Pro experience; CPU camera/projection math, Metal volume probe, contact-sheet/PLY exports, and a RealityKit visionOS viewer prototype are in place; visionOS 26.2 simulator runtime is installed and the target builds for the generic simulator; next is a launched app bundle; read `experiments/vision-pro-4d-raytracer/docs/HANDOFF.md`.
 - `experiments/core-data-rest-layer/` — read `experiments/core-data-rest-layer/docs/HANDOFF.md`.
 
 Parked / optional follow-up:
@@ -79,7 +79,7 @@ Root todos track repo-level or cross-experiment work only. Experiment-specific w
 
 ## Likely Next Actions
 
-1. For `vision-pro-4d-raytracer`, work local todo `005`: wrap the RealityKit viewer prototype in a simulator/device-verified visionOS app bundle.
+1. For `vision-pro-4d-raytracer`, work local todo `005`: wrap the RealityKit viewer prototype in a visionOS app bundle and install/launch it on the `Skunkworks Vision Pro` simulator or physical hardware.
 2. `core-data-rest-layer` has no ready local todo after endpoint-mapped task status predicate support (`013`) was completed.
 3. Keep root handoff minimal; update experiment-local handoff with implementation details.
 4. Decide later whether `experiments/README.md` should stay a manual catalog, become generated, or both.
