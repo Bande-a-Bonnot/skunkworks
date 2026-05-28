@@ -30,6 +30,7 @@ public final class EmbeddedRESTServer {
     private var forcedResponsesByPathPrefix: [String: ForcedResponse] = [:]
     private var lastRequestHeaders: [String: String] = [:]
     private var lastRequestPath: String?
+    private var lastRequestQueryItems: [String: String] = [:]
     private var requestCountsByPath: [String: Int] = [:]
     private let encoder = JSONCoding.makeEncoder()
     private let decoder = JSONCoding.makeDecoder()
@@ -143,6 +144,10 @@ public final class EmbeddedRESTServer {
         stateQueue.sync { lastRequestPath }
     }
 
+    public func lastQueryItem(_ name: String) -> String? {
+        stateQueue.sync { lastRequestQueryItems[name] }
+    }
+
     public func requestCount(forPath path: String) -> Int {
         stateQueue.sync { requestCountsByPath[path, default: 0] }
     }
@@ -179,6 +184,7 @@ public final class EmbeddedRESTServer {
         let latency = stateQueue.sync {
             lastRequestHeaders = request.headers
             lastRequestPath = request.path
+            lastRequestQueryItems = request.queryItems
             requestCountsByPath[request.path, default: 0] += 1
             return endpointLatencies
                 .filter { request.path.hasPrefix($0.key) }
@@ -233,6 +239,9 @@ public final class EmbeddedRESTServer {
             let payload = stateQueue.sync {
                 tasks.values
                     .filter { $0.projectId == projectID }
+                    .filter { task in
+                        request.queryItems["status"].map { task.status == $0 } ?? true
+                    }
                     .sorted { $0.title < $1.title }
                     .map { $0.summaryOnly() }
             }

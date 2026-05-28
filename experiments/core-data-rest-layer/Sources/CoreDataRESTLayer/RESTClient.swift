@@ -47,10 +47,11 @@ public final class RESTClient {
         try await send(path: "/projects", method: "GET", responseType: [RemoteProject].self)
     }
 
-    public func fetchTasks(projectID: UUID, pageSize: Int? = nil) async throws -> [RemoteTask] {
+    public func fetchTasks(projectID: UUID, pageSize: Int? = nil, status: String? = nil) async throws -> [RemoteTask] {
         try await fetchTasks(
             projectID: projectID,
-            pagination: pageSize.map { .cursor(limit: $0) } ?? .none
+            pagination: pageSize.map { .cursor(limit: $0) } ?? .none,
+            status: status
         )
     }
 
@@ -58,15 +59,19 @@ public final class RESTClient {
         try await send(path: "/tasks/\(id.uuidString)", method: "GET", responseType: RemoteTask.self)
     }
 
-    public func fetchTasks(projectID: UUID, pagination: TaskPaginationStrategy) async throws -> [RemoteTask] {
+    public func fetchTasks(projectID: UUID, pagination: TaskPaginationStrategy, status: String? = nil) async throws -> [RemoteTask] {
         switch pagination {
         case .none:
-            return try await send(path: "/projects/\(projectID.uuidString)/tasks", method: "GET", responseType: [RemoteTask].self)
+            return try await send(
+                path: try projectTasksPath(projectID: projectID, status: status),
+                method: "GET",
+                responseType: [RemoteTask].self
+            )
         case let .cursor(limit):
             var allTasks: [RemoteTask] = []
             var cursor: String?
             repeat {
-                let page = try await fetchTaskCursorPage(projectID: projectID, limit: limit, cursor: cursor)
+                let page = try await fetchTaskCursorPage(projectID: projectID, limit: limit, cursor: cursor, status: status)
                 allTasks.append(contentsOf: page.items)
                 cursor = page.nextCursor
             } while cursor != nil
@@ -75,7 +80,7 @@ public final class RESTClient {
             var allTasks: [RemoteTask] = []
             var offset = 0
             while true {
-                let page = try await fetchTaskOffsetPage(projectID: projectID, limit: limit, offset: offset)
+                let page = try await fetchTaskOffsetPage(projectID: projectID, limit: limit, offset: offset, status: status)
                 allTasks.append(contentsOf: page)
                 guard page.count == limit else { break }
                 offset += page.count
@@ -85,7 +90,7 @@ public final class RESTClient {
             var allTasks: [RemoteTask] = []
             var pageIndex = 1
             while true {
-                let page = try await fetchTaskNumberedPage(projectID: projectID, page: pageIndex, perPage: perPage)
+                let page = try await fetchTaskNumberedPage(projectID: projectID, page: pageIndex, perPage: perPage, status: status)
                 allTasks.append(contentsOf: page.items)
                 if let totalPages = page.totalPages {
                     guard page.page < totalPages else { break }
@@ -98,43 +103,56 @@ public final class RESTClient {
         }
     }
 
-    public func fetchTaskCursorPage(projectID: UUID, limit: Int, cursor: String? = nil) async throws -> CursorPage<RemoteTask> {
-        var components = URLComponents()
-        components.path = "/projects/\(projectID.uuidString)/tasks"
-        components.queryItems = [URLQueryItem(name: "limit", value: String(limit))]
+    public func fetchTaskCursorPage(
+        projectID: UUID,
+        limit: Int,
+        cursor: String? = nil,
+        status: String? = nil
+    ) async throws -> CursorPage<RemoteTask> {
+        var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
         if let cursor {
-            components.queryItems?.append(URLQueryItem(name: "cursor", value: cursor))
+            queryItems.append(URLQueryItem(name: "cursor", value: cursor))
         }
-        guard let path = components.string else {
-            throw RESTClientError.invalidResponse
-        }
-        return try await send(path: path, method: "GET", responseType: CursorPage<RemoteTask>.self)
+        return try await send(
+            path: try projectTasksPath(projectID: projectID, status: status, queryItems: queryItems),
+            method: "GET",
+            responseType: CursorPage<RemoteTask>.self
+        )
     }
 
-    public func fetchTaskOffsetPage(projectID: UUID, limit: Int, offset: Int) async throws -> [RemoteTask] {
-        var components = URLComponents()
-        components.path = "/projects/\(projectID.uuidString)/tasks"
-        components.queryItems = [
-            URLQueryItem(name: "limit", value: String(limit)),
-            URLQueryItem(name: "offset", value: String(offset))
-        ]
-        guard let path = components.string else {
-            throw RESTClientError.invalidResponse
-        }
-        return try await send(path: path, method: "GET", responseType: [RemoteTask].self)
+    public func fetchTaskOffsetPage(projectID: UUID, limit: Int, offset: Int, status: String? = nil) async throws -> [RemoteTask] {
+        try await send(
+            path: try projectTasksPath(
+                projectID: projectID,
+                status: status,
+                queryItems: [
+                    URLQueryItem(name: "limit", value: String(limit)),
+                    URLQueryItem(name: "offset", value: String(offset))
+                ]
+            ),
+            method: "GET",
+            responseType: [RemoteTask].self
+        )
     }
 
-    public func fetchTaskNumberedPage(projectID: UUID, page: Int, perPage: Int) async throws -> NumberedPage<RemoteTask> {
-        var components = URLComponents()
-        components.path = "/projects/\(projectID.uuidString)/tasks"
-        components.queryItems = [
-            URLQueryItem(name: "page", value: String(page)),
-            URLQueryItem(name: "perPage", value: String(perPage))
-        ]
-        guard let path = components.string else {
-            throw RESTClientError.invalidResponse
-        }
-        return try await send(path: path, method: "GET", responseType: NumberedPage<RemoteTask>.self)
+    public func fetchTaskNumberedPage(
+        projectID: UUID,
+        page: Int,
+        perPage: Int,
+        status: String? = nil
+    ) async throws -> NumberedPage<RemoteTask> {
+        try await send(
+            path: try projectTasksPath(
+                projectID: projectID,
+                status: status,
+                queryItems: [
+                    URLQueryItem(name: "page", value: String(page)),
+                    URLQueryItem(name: "perPage", value: String(perPage))
+                ]
+            ),
+            method: "GET",
+            responseType: NumberedPage<RemoteTask>.self
+        )
     }
 
     public func patchTask(id: UUID, title: String, status: String, version: Int) async throws -> RemoteTask {
@@ -145,6 +163,26 @@ public final class RESTClient {
             requestBody: patch,
             responseType: RemoteTask.self
         )
+    }
+
+    private func projectTasksPath(
+        projectID: UUID,
+        status: String?,
+        queryItems: [URLQueryItem] = []
+    ) throws -> String {
+        var components = URLComponents()
+        components.path = "/projects/\(projectID.uuidString)/tasks"
+        components.queryItems = queryItems
+        if let status {
+            components.queryItems?.append(URLQueryItem(name: "status", value: status))
+        }
+        if components.queryItems?.isEmpty == true {
+            components.queryItems = nil
+        }
+        guard let path = components.string else {
+            throw RESTClientError.invalidResponse
+        }
+        return path
     }
 
     private func send<Response: Decodable>(

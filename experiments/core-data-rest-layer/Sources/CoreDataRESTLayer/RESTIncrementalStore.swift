@@ -294,7 +294,8 @@ public final class RESTIncrementalStore: NSIncrementalStore {
                 context.object(with: newObjectID(for: entity(named: "CDProject"), referenceObject: project.id.uuidString))
             }
         case "CDTask":
-            let tasks = try sorted(fetchRemoteTasksForAllProjects(), using: fetchRequest.sortDescriptors) { task, key in
+            let statusFilter = try Self.taskStatusFilter(from: fetchRequest.predicate, entityName: fetchRequest.entity?.name)
+            let tasks = try sorted(fetchRemoteTasksForAllProjects(status: statusFilter), using: fetchRequest.sortDescriptors) { task, key in
                 switch key {
                 case "title": return task.title
                 case "status": return task.status
@@ -628,12 +629,7 @@ public final class RESTIncrementalStore: NSIncrementalStore {
                 reason: "Only managed-object fetch results are supported"
             )
         }
-        guard request.predicate == nil else {
-            throw RESTIncrementalStoreError.unsupportedFetchShape(
-                entity: entityName,
-                reason: "Predicates are not translated to REST endpoints"
-            )
-        }
+        _ = try Self.taskStatusFilter(from: request.predicate, entityName: entityName)
         guard request.fetchLimit == 0 else {
             throw RESTIncrementalStoreError.unsupportedFetchShape(
                 entity: entityName,
@@ -666,6 +662,46 @@ public final class RESTIncrementalStore: NSIncrementalStore {
                 )
             }
         }
+    }
+
+    private static func taskStatusFilter(from predicate: NSPredicate?, entityName: String?) throws -> String? {
+        guard let predicate else {
+            return nil
+        }
+        guard entityName == "CDTask" else {
+            throw RESTIncrementalStoreError.unsupportedFetchShape(
+                entity: entityName,
+                reason: "Only CDTask status equality predicates are mapped to REST endpoints"
+            )
+        }
+        guard let comparison = predicate as? NSComparisonPredicate,
+              comparison.predicateOperatorType == .equalTo,
+              comparison.comparisonPredicateModifier == .direct,
+              comparison.options.isEmpty else {
+            throw RESTIncrementalStoreError.unsupportedFetchShape(
+                entity: entityName,
+                reason: "Only CDTask status equality predicates are mapped to REST endpoints"
+            )
+        }
+        if let status = statusFilterValue(keyExpression: comparison.leftExpression, valueExpression: comparison.rightExpression) {
+            return status
+        }
+        if let status = statusFilterValue(keyExpression: comparison.rightExpression, valueExpression: comparison.leftExpression) {
+            return status
+        }
+        throw RESTIncrementalStoreError.unsupportedFetchShape(
+            entity: entityName,
+            reason: "Only CDTask status equality predicates are mapped to REST endpoints"
+        )
+    }
+
+    private static func statusFilterValue(keyExpression: NSExpression, valueExpression: NSExpression) -> String? {
+        guard keyExpression.expressionType == .keyPath,
+              keyExpression.keyPath == "status",
+              valueExpression.expressionType == .constantValue else {
+            return nil
+        }
+        return valueExpression.constantValue as? String
     }
 
     private func validateSupportedSaveShape(_ request: NSSaveChangesRequest) throws {
@@ -742,8 +778,12 @@ public final class RESTIncrementalStore: NSIncrementalStore {
         return projects
     }
 
-    private func fetchRemoteTasks(projectID: UUID, pagination: TaskPaginationStrategy = .none) throws -> [RemoteTask] {
-        let tasks = try requireClient().fetchTasks(projectID: projectID, pagination: pagination)
+    private func fetchRemoteTasks(
+        projectID: UUID,
+        pagination: TaskPaginationStrategy = .none,
+        status: String? = nil
+    ) throws -> [RemoteTask] {
+        let tasks = try requireClient().fetchTasks(projectID: projectID, pagination: pagination, status: status)
         lock.withLock {
             taskIDsByProjectID[projectID] = tasks.map(\.id)
             for task in tasks {
@@ -761,9 +801,9 @@ public final class RESTIncrementalStore: NSIncrementalStore {
         return task
     }
 
-    private func fetchRemoteTasksForAllProjects() throws -> [RemoteTask] {
+    private func fetchRemoteTasksForAllProjects(status: String? = nil) throws -> [RemoteTask] {
         try fetchRemoteProjects().flatMap { project in
-            try fetchRemoteTasks(projectID: project.id, pagination: taskPagination)
+            try fetchRemoteTasks(projectID: project.id, pagination: taskPagination, status: status)
         }
     }
 
@@ -1088,15 +1128,15 @@ private final class BlockingRESTClient {
         try send(path: "/tasks/\(id.uuidString)", responseType: RemoteTask.self)
     }
 
-    func fetchTasks(projectID: UUID, pagination: TaskPaginationStrategy = .none) throws -> [RemoteTask] {
+    func fetchTasks(projectID: UUID, pagination: TaskPaginationStrategy = .none, status: String? = nil) throws -> [RemoteTask] {
         switch pagination {
         case .none:
-            return try send(path: "/projects/\(projectID.uuidString)/tasks", responseType: [RemoteTask].self)
+            return try send(path: projectTasksPath(projectID: projectID, status: status), responseType: [RemoteTask].self)
         case let .cursor(limit):
             var allTasks: [RemoteTask] = []
             var cursor: String?
             repeat {
-                let page = try fetchTaskCursorPage(projectID: projectID, limit: limit, cursor: cursor)
+                let page = try fetchTaskCursorPage(projectID: projectID, limit: limit, cursor: cursor, status: status)
                 allTasks.append(contentsOf: page.items)
                 cursor = page.nextCursor
             } while cursor != nil
@@ -1105,7 +1145,7 @@ private final class BlockingRESTClient {
             var allTasks: [RemoteTask] = []
             var offset = 0
             while true {
-                let page = try fetchTaskOffsetPage(projectID: projectID, limit: limit, offset: offset)
+                let page = try fetchTaskOffsetPage(projectID: projectID, limit: limit, offset: offset, status: status)
                 allTasks.append(contentsOf: page)
                 guard page.count == limit else { break }
                 offset += page.count
@@ -1115,7 +1155,7 @@ private final class BlockingRESTClient {
             var allTasks: [RemoteTask] = []
             var pageIndex = 1
             while true {
-                let page = try fetchTaskNumberedPage(projectID: projectID, page: pageIndex, perPage: perPage)
+                let page = try fetchTaskNumberedPage(projectID: projectID, page: pageIndex, perPage: perPage, status: status)
                 allTasks.append(contentsOf: page.items)
                 if let totalPages = page.totalPages {
                     guard page.page < totalPages else { break }
@@ -1128,43 +1168,63 @@ private final class BlockingRESTClient {
         }
     }
 
-    func fetchTaskCursorPage(projectID: UUID, limit: Int, cursor: String?) throws -> CursorPage<RemoteTask> {
-        var components = URLComponents()
-        components.path = "/projects/\(projectID.uuidString)/tasks"
-        components.queryItems = [URLQueryItem(name: "limit", value: String(limit))]
+    func fetchTaskCursorPage(projectID: UUID, limit: Int, cursor: String?, status: String? = nil) throws -> CursorPage<RemoteTask> {
+        var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
         if let cursor {
-            components.queryItems?.append(URLQueryItem(name: "cursor", value: cursor))
+            queryItems.append(URLQueryItem(name: "cursor", value: cursor))
         }
-        guard let path = components.string else {
-            throw RESTIncrementalStoreError.invalidResponse
-        }
-        return try send(path: path, responseType: CursorPage<RemoteTask>.self)
+        return try send(
+            path: projectTasksPath(projectID: projectID, status: status, queryItems: queryItems),
+            responseType: CursorPage<RemoteTask>.self
+        )
     }
 
-    func fetchTaskOffsetPage(projectID: UUID, limit: Int, offset: Int) throws -> [RemoteTask] {
-        var components = URLComponents()
-        components.path = "/projects/\(projectID.uuidString)/tasks"
-        components.queryItems = [
-            URLQueryItem(name: "limit", value: String(limit)),
-            URLQueryItem(name: "offset", value: String(offset))
-        ]
-        guard let path = components.string else {
-            throw RESTIncrementalStoreError.invalidResponse
-        }
-        return try send(path: path, responseType: [RemoteTask].self)
+    func fetchTaskOffsetPage(projectID: UUID, limit: Int, offset: Int, status: String? = nil) throws -> [RemoteTask] {
+        try send(
+            path: projectTasksPath(
+                projectID: projectID,
+                status: status,
+                queryItems: [
+                    URLQueryItem(name: "limit", value: String(limit)),
+                    URLQueryItem(name: "offset", value: String(offset))
+                ]
+            ),
+            responseType: [RemoteTask].self
+        )
     }
 
-    func fetchTaskNumberedPage(projectID: UUID, page: Int, perPage: Int) throws -> NumberedPage<RemoteTask> {
+    func fetchTaskNumberedPage(projectID: UUID, page: Int, perPage: Int, status: String? = nil) throws -> NumberedPage<RemoteTask> {
+        try send(
+            path: projectTasksPath(
+                projectID: projectID,
+                status: status,
+                queryItems: [
+                    URLQueryItem(name: "page", value: String(page)),
+                    URLQueryItem(name: "perPage", value: String(perPage))
+                ]
+            ),
+            responseType: NumberedPage<RemoteTask>.self
+        )
+    }
+
+    private func projectTasksPath(
+        projectID: UUID,
+        status: String?,
+        queryItems: [URLQueryItem] = []
+    ) throws -> String {
         var components = URLComponents()
         components.path = "/projects/\(projectID.uuidString)/tasks"
-        components.queryItems = [
-            URLQueryItem(name: "page", value: String(page)),
-            URLQueryItem(name: "perPage", value: String(perPage))
-        ]
+        components.queryItems = queryItems
+        if let status {
+            components.queryItems?.append(URLQueryItem(name: "status", value: status))
+        }
+        if components.queryItems?.isEmpty == true {
+            components.queryItems = nil
+        }
         guard let path = components.string else {
             throw RESTIncrementalStoreError.invalidResponse
         }
-        return try send(path: path, responseType: NumberedPage<RemoteTask>.self)
+        return path
     }
 
     func patchTask(id: UUID, title: String, status: String, version: Int) throws -> RemoteTask {

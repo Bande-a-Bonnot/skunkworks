@@ -258,7 +258,27 @@ final class CoreDataRESTLayerTests: XCTestCase {
         }
     }
 
-    func testRESTIncrementalStoreFetchPredicateFailsFast() throws {
+    func testRESTIncrementalStoreStatusPredicateMapsToTaskEndpointFilter() throws {
+        var fixture = Fixture.make()
+        fixture.tasks[1].status = "done"
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let stack = try RESTCoreDataStack(baseURL: try server.baseURL)
+        let request = CDTask.fetchRequestSortedByTitle()
+        request.predicate = NSPredicate(format: "status == %@", "done")
+
+        let tasks = try stack.context.fetch(request)
+
+        XCTAssertEqual(tasks.map(\.title), ["Project into Core Data"])
+        XCTAssertEqual(tasks.map(\.status), ["done"])
+        XCTAssertEqual(server.requestCount(forPath: "/projects"), 1)
+        XCTAssertEqual(server.requestCount(forPath: "/projects/\(fixture.project.id.uuidString)/tasks"), 1)
+        XCTAssertEqual(server.lastQueryItem("status"), "done")
+    }
+
+    func testRESTIncrementalStoreUnsupportedPredicateStillFailsFast() throws {
         let fixture = Fixture.make()
         let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
         try server.start()
@@ -266,10 +286,10 @@ final class CoreDataRESTLayerTests: XCTestCase {
 
         let stack = try RESTCoreDataStack(baseURL: try server.baseURL)
         let request = CDTask.fetchRequest()
-        request.predicate = NSPredicate(format: "status == %@", "open")
+        request.predicate = NSPredicate(format: "title == %@", "Wire embedded server")
 
         XCTAssertThrowsError(try stack.context.fetch(request)) { error in
-            assertUnsupportedFetch(error, entity: "CDTask", reasonContains: "Predicates")
+            assertUnsupportedFetch(error, entity: "CDTask", reasonContains: "Only CDTask status equality")
         }
         XCTAssertEqual(server.requestCount(forPath: "/projects"), 0)
     }
@@ -601,6 +621,20 @@ final class CoreDataRESTLayerTests: XCTestCase {
 
         let project = try XCTUnwrap(stack.viewContext.fetch(CDProject.fetchRequestSortedByName()).first)
         XCTAssertEqual(project.tasks.count, 5)
+    }
+
+    func testClientFetchTasksCanSendStatusFilter() async throws {
+        var fixture = Fixture.make()
+        fixture.tasks[0].status = "blocked"
+        let server = EmbeddedRESTServer(projects: [fixture.project], tasks: fixture.tasks)
+        try server.start()
+        defer { server.stop() }
+
+        let client = RESTClient(baseURL: try server.baseURL)
+        let tasks = try await client.fetchTasks(projectID: fixture.project.id, status: "blocked")
+
+        XCTAssertEqual(tasks.map(\.id), [fixture.firstTaskID])
+        XCTAssertEqual(server.lastQueryItem("status"), "blocked")
     }
 
     func testPullAllCanTraverseOffsetTaskResponses() async throws {

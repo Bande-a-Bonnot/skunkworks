@@ -1,7 +1,7 @@
 # Core Data REST Layer Handoff
 
 **URN:** `skunkworks::local::experiment::core-data-rest-layer::handoff::019e4c87-dd7e-708c-be24-fda71b3451b3`  
-**Last updated:** 2026-05-25
+**Last updated:** 2026-05-26
 **Update this before context compaction or at the end of meaningful sessions.**
 
 Read this after `AGENTS.md` when working on `experiments/core-data-rest-layer/`.
@@ -20,12 +20,12 @@ Implemented package:
 
 - `Package.swift`
 - `Sources/CoreDataRESTLayer/RemoteModels.swift` — JSON domain models and shared JSON coding, including summary-vs-detail task decoding.
-- `Sources/CoreDataRESTLayer/RESTClient.swift` — `URLSession` client for `GET /projects`, paginated `GET /projects/{projectID}/tasks`, `GET /tasks/{taskID}`, and `PATCH /tasks/{taskID}`.
+- `Sources/CoreDataRESTLayer/RESTClient.swift` — `URLSession` client for `GET /projects`, optionally status-filtered/paginated `GET /projects/{projectID}/tasks`, `GET /tasks/{taskID}`, and `PATCH /tasks/{taskID}`.
 - `Sources/CoreDataRESTLayer/VersionMapping.swift` — explicit API version / local model version compatibility skeleton.
 - `Sources/CoreDataRESTLayer/CoreDataStack.swift` — programmatic Core Data model with `CDProject` / `CDTask`, relationship, version, dirty, conflict metadata, loaded field metadata, `CDPendingTaskChange`, `CDRemoteRelationshipState`, and small typed metadata helpers.
-- `Sources/CoreDataRESTLayer/RESTIncrementalStore.swift` — `NSIncrementalStore` that maps Core Data fetches, relationship faults, explicit task detail refreshes, pending task-change staging/flush, task saves, relationship sync-state synthesis, typed fail-fast errors for unsupported fetch/save shapes, and configured request timeouts to REST calls.
+- `Sources/CoreDataRESTLayer/RESTIncrementalStore.swift` — `NSIncrementalStore` that maps Core Data fetches, relationship faults, explicit task detail refreshes, pending task-change staging/flush, task saves, relationship sync-state synthesis, typed fail-fast errors for unsupported fetch/save shapes, narrow endpoint-mapped task status predicates, and configured request timeouts to REST calls.
 - `Sources/CoreDataRESTLayer/ProjectionSync.swift` — earlier pull projection path; keep as historical/baseline code, not the target architecture.
-- `Sources/CoreDataRESTLayerTestServer/EmbeddedRESTServer.swift` — dependency-free `Network.framework` local HTTP server bound to `127.0.0.1:0`, with pagination, latency hooks, summary task lists, and task detail routes.
+- `Sources/CoreDataRESTLayerTestServer/EmbeddedRESTServer.swift` — dependency-free `Network.framework` local HTTP server bound to `127.0.0.1:0`, with pagination, status filtering, latency hooks, summary task lists, and task detail routes.
 - `Tests/CoreDataRESTLayerTests/CoreDataRESTLayerTests.swift` — acceptance tests for incremental-store fetch/fault/save, pending task changes, partial detail loading, conflict/error behavior, background context helper, plus earlier projection, pagination, latency, and version-header tests.
 
 Current docs:
@@ -46,6 +46,8 @@ Current docs:
 - `docs/solutions/2026-05-25-structured-metadata-cleanup-findings.md` records the typed metadata cleanup.
 - `docs/solutions/2026-05-25-fail-fast-supported-surface-findings.md` records the unsupported Core Data surface hardening pass.
 - `docs/solutions/2026-05-25-cancellation-timeout-findings.md` records the request-timeout spike and cancellation limits.
+- `docs/plans/2026-05-26-endpoint-mapped-filter-predicates-plan.md` records the narrow status-predicate plan.
+- `docs/solutions/2026-05-26-endpoint-mapped-filter-predicates-findings.md` records the endpoint-mapped filter findings.
 
 ## Working Direction
 
@@ -75,6 +77,7 @@ Done:
 - `010` — `todos/010-done-p2-structured-metadata-cleanup.md`
 - `011` — `todos/011-done-p2-fail-fast-supported-surface.md`
 - `012` — `todos/012-done-p2-cancellation-timeouts.md`
+- `013` — `todos/013-done-p2-endpoint-mapped-filter-predicates.md`
 
 Ready: none.
 
@@ -95,7 +98,7 @@ Still open:
 - Should pending changes become durable local storage if this moves beyond an in-memory custom-store spike?
 - Can synchronous store methods be made cancellable enough for real app use? Current timeout spike bounds waits, but true cancellation remains cooperative/limited by synchronous `NSIncrementalStore` hooks.
 - How far should explicit partial-field metadata go before it needs a separate sync/detail-state entity instead of `CDTask.loadedFields`?
-- Which predicates/server filters deserve explicit endpoint mappings instead of fail-fast rejection?
+- Which additional predicates/server filters deserve explicit endpoint mappings instead of fail-fast rejection? `CDTask.status == <String>` is now the first supported mapping.
 
 ## Verification
 
@@ -106,13 +109,13 @@ cd experiments/core-data-rest-layer
 swift test
 ```
 
-Last verified 2026-05-25: 31 XCTest tests passed.
+Last verified 2026-05-28: 33 XCTest tests passed.
 
 ## Next Action
 
 No ready local todo remains. Good next options:
 
-1. Open a new todo for explicit endpoint-mapped filter/predicate support if that becomes important.
+1. Decide whether another endpoint-shaped predicate is worth mapping, such as `project.id == <UUID>` or `project.id == <UUID> AND status == <String>`.
 2. Decide whether pending changes need durable local storage beyond the in-memory custom-store cache.
 3. Design higher-level async loader/writer APIs if true app-facing cancellation is still worth exploring.
 4. Decide whether to graduate this into a small library prototype or archive it as findings.

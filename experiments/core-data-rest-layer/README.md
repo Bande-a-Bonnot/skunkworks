@@ -93,7 +93,7 @@ Plan: `docs/plans/2026-05-22-core-data-rest-layer-first-spike-plan.md`.
 - `docs/HANDOFF.md` — current state and exact next action.
 - `docs/initial-questions.md` — question bank.
 - `Package.swift` — Swift package harness.
-- `Sources/CoreDataRESTLayer/` — REST models/client, API/model version mapping, programmatic Core Data model, projection sync, typed metadata helpers, and `RESTIncrementalStore` with explicit task-detail loading, pending task-change staging, fail-fast unsupported-surface errors, and configured request timeouts.
+- `Sources/CoreDataRESTLayer/` — REST models/client, API/model version mapping, programmatic Core Data model, projection sync, typed metadata helpers, and `RESTIncrementalStore` with explicit task-detail loading, pending task-change staging, fail-fast unsupported-surface errors, endpoint-mapped task status predicates, and configured request timeouts.
 - `Sources/CoreDataRESTLayerTestServer/` — embedded deterministic HTTP server for tests.
 - `Tests/CoreDataRESTLayerTests/` — acceptance tests for sync/edit/push/conflict flows.
 - `todos/` — local task breakdown.
@@ -128,6 +128,7 @@ The test harness starts an embedded REST server on `127.0.0.1:0`. The current me
 - Pending-change semantics are cleaner when `CDTask` remains the last accepted remote snapshot and `CDPendingTaskChange` carries local write intent plus retry/conflict lifecycle.
 - Pending-change state, pending field names, and loaded-field metadata now use small enums/helpers at call sites while retaining string storage for the spike.
 - The REST store now fails fast for unsupported predicates, fetch limits/count-style fetch shapes, and unsupported domain inserts/deletes instead of silently approximating them.
+- A deliberately supported `CDTask.status == <String>` predicate maps to `GET /projects/{id}/tasks?status=...`; unsupported predicates still fail before HTTP rather than falling back to local filtering.
 - Keep API version, local Core Data model version, and per-resource optimistic concurrency version separate.
 - Configured custom-store request timeouts turn slow REST endpoints into `RESTIncrementalStoreError.requestTimedOut` instead of indefinite semaphore waits.
 - Timeout is a bounded-wait safety valve, not true cancellation: synchronous `NSIncrementalStore` hooks remain cooperative/limited, so app-facing work should still run off the main context.
@@ -146,6 +147,7 @@ The test harness starts an embedded REST server on `127.0.0.1:0`. The current me
 - [x] Replace key pending-change and loaded-field string literals with structured metadata helpers.
 - [x] Add fail-fast tests/errors for unsupported custom-store fetch/save shapes.
 - [x] Add a configured timeout around the blocking custom-store REST path.
+- [x] Add narrow endpoint-mapped filter predicate support for task status.
 
 ## Cleanup / Graduation
 
